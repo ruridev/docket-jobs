@@ -214,6 +214,9 @@ dl { margin: 0; }
 :root[data-theme="g6"] body .btn.primary { background: var(--text); color: var(--panel); }
 :root[data-theme="g6"] body .btn.danger { background: var(--danger); color: var(--panel); }
 :root[data-theme="g6"] body :is(.btn.primary, .btn.danger)::before, :root[data-theme="g6"] body :is(.btn.primary, .btn.danger)::after { content: none; }
+/* Filled buttons keep a dark fill on hover; the light hover above would wash out their text. */
+:root[data-theme="g6"] body .btn.primary:hover { background: var(--muted); filter: none; }
+:root[data-theme="g6"] body .btn.danger:hover { background: #a81d20; filter: none; }
 :root[data-theme="g6"] body .field :is(input, select) { background: #fff; border: 1px solid #555; }
 :root[data-theme="g6"] body :is(.card, .menu) { border: 1px solid #555; }
 :root[data-theme="g6"] body .dialog { border: 2px solid var(--text); }
