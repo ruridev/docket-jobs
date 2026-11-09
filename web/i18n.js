@@ -18,9 +18,10 @@ export const I18N = {
     importBtn: '가져오기', imported: '가져옴', undo: '되돌리기', loading: '불러오는 중…',
     importEmpty: '가져올 수 있는 시작 항목이 없어요.', importError: '처리하지 못했어요. 다시 시도해 주세요.',
     needsAdmin: '관리자 확인 창이 떠요', losesAdmin: '가져오면 관리자 권한 없이 실행돼요', undoNeedsAdmin: '되돌릴 때 관리자 확인 창이 떠요',
+    allUsers: '모든 사용자용이라, 가져오면 이 사용자에게서만 실행돼요',
     startupErrors: {
       uac_cancelled: '관리자 확인 창에서 취소해서 바꾸지 않았어요.',
-      admin_failed: '관리자 권한으로도 바꾸지 못했어요. 작업 스케줄러에서 직접 확인해 주세요.',
+      admin_failed: '관리자 권한으로도 바꾸지 못했어요. 원래 등록된 곳에서 직접 확인해 주세요.',
       change_failed: '권한이 없어서 원래 등록을 바꾸지 못했어요.',
     },
     notes: {
@@ -61,9 +62,10 @@ export const I18N = {
     importBtn: 'Import', imported: 'Imported', undo: 'Undo', loading: 'Loading…',
     importEmpty: 'No startup items to import.', importError: 'Something went wrong. Please try again.',
     needsAdmin: 'Asks for admin approval', losesAdmin: 'Runs without admin rights once imported', undoNeedsAdmin: 'Undo asks for admin approval',
+    allUsers: 'Set up for all users; once imported it runs only for this user',
     startupErrors: {
       uac_cancelled: 'The admin prompt was cancelled, so nothing was changed.',
-      admin_failed: 'Couldn’t change it even with admin rights. Please check it in Task Scheduler.',
+      admin_failed: 'Couldn’t change it even with admin rights. Please check where it was originally registered.',
       change_failed: 'Couldn’t change the original entry (no permission).',
     },
     notes: {
@@ -104,9 +106,10 @@ export const I18N = {
     importBtn: '取り込む', imported: '取り込み済み', undo: '元に戻す', loading: '読み込み中…',
     importEmpty: '取り込めるスタートアップ項目はありません。', importError: '処理できませんでした。もう一度お試しください。',
     needsAdmin: '管理者の確認が表示されます', losesAdmin: '取り込むと管理者権限なしで実行されます', undoNeedsAdmin: '元に戻すときに管理者の確認が表示されます',
+    allUsers: '全ユーザー向けの項目のため、取り込むとこのユーザーでのみ実行されます',
     startupErrors: {
       uac_cancelled: '管理者の確認がキャンセルされたため、変更していません。',
-      admin_failed: '管理者権限でも変更できませんでした。タスク スケジューラで確認してください。',
+      admin_failed: '管理者権限でも変更できませんでした。元の登録先で確認してください。',
       change_failed: '権限がないため、元の登録を変更できませんでした。',
     },
     notes: {

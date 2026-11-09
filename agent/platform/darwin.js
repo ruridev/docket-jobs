@@ -97,25 +97,80 @@ async function disabledLabels() {
   return off;
 }
 
-async function scanLaunchAgents() {
+// LaunchAgents for every user. Readable by anyone, but owned by root, so turning one off
+// takes an administrator password. (LaunchDaemons are left out on purpose: they run as
+// root before login, which b_jobs, running as the user, can't stand in for.)
+const SYSTEM_AGENTS = process.env.BJOBS_SYSTEM_AGENTS_DIR || '/Library/LaunchAgents';
+
+/** Turns a LaunchAgent plist (as JSON) into a startup item, or null if it doesn't start at login. */
+export function agentToItem(p, full, { system = false } = {}) {
+  if (!p || p.Disabled || !(p.RunAtLoad || p.KeepAlive)) return null;
+  const argv = Array.isArray(p.ProgramArguments) && p.ProgramArguments.length ? p.ProgramArguments : p.Program ? [p.Program] : null;
+  if (!argv || argv.includes(AGENT_ENTRY)) return null; // b_jobs itself
+  const file = path.basename(full);
+  return {
+    key: `${system ? 'sysagent' : 'agent'}:${file}`, name: p.Label || path.parse(file).name,
+    source: system ? 'sysagent' : 'agent',
+    command: argv.map(shq).join(' '), cwd: p.WorkingDirectory || '',
+    needsAdmin: system, allUsers: system,
+    data: { file: full, admin: system },
+  };
+}
+
+async function scanAgentDir(dir, off, opts) {
   const items = [];
   let files = [];
-  try { files = fs.readdirSync(USER_AGENTS).filter((f) => f.endsWith('.plist')); } catch { return items; }
-  const off = await disabledLabels();
+  try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.plist')); } catch { return items; }
   for (const file of files) {
-    const full = path.join(USER_AGENTS, file);
+    const full = path.join(dir, file);
     if (full === PLIST) continue;
     let p;
     try { p = JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', full])).stdout); } catch { continue; }
-    if (p.Disabled || off.has(p.Label) || !(p.RunAtLoad || p.KeepAlive)) continue;
-    const argv = Array.isArray(p.ProgramArguments) && p.ProgramArguments.length ? p.ProgramArguments : p.Program ? [p.Program] : null;
-    if (!argv || argv.includes(AGENT_ENTRY)) continue; // b_jobs itself
-    items.push({
-      key: `agent:${file}`, name: p.Label || path.parse(file).name, source: 'agent',
-      command: argv.map(shq).join(' '), cwd: p.WorkingDirectory || '', data: { file: full },
-    });
+    if (off.has(p.Label)) continue;
+    const item = agentToItem(p, full, opts);
+    if (item) items.push(item);
   }
   return items;
+}
+
+async function scanLaunchAgents() {
+  const off = await disabledLabels();
+  return [
+    ...(await scanAgentDir(USER_AGENTS, off, { system: false })),
+    ...(await scanAgentDir(SYSTEM_AGENTS, off, { system: true })),
+  ];
+}
+
+function adminError(code, cause) {
+  return Object.assign(new Error(code), { code, cause });
+}
+
+/**
+ * Runs one shell command as root behind macOS's administrator password prompt.
+ * The command goes in as an osascript argument, so no AppleScript string escaping is involved.
+ */
+async function runAsAdmin(shellCommand) {
+  const script = 'function run(a){const app=Application.currentApplication();app.includeStandardAdditions=true;app.doShellScript(a[0],{administratorPrivileges:true})}';
+  try {
+    await jxa(script, [shellCommand], 180000);
+  } catch (err) {
+    // -128 = the user pressed Cancel on the password prompt.
+    throw adminError(/-128/.test(String(err.stderr || err.message)) ? 'uac_cancelled' : 'admin_failed', err);
+  }
+}
+
+/** Moves a plist away (or back) so it stops (or starts) loading at the next login. */
+async function movePlist(from, to, admin) {
+  if (fs.existsSync(to)) throw new Error('A file with the same name is already there');
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  if (admin) await runAsAdmin(`/bin/mv -n ${shq(from)} ${shq(to)}`);
+  else fs.renameSync(from, to);
+}
+
+function backupPath(backupDir, file) {
+  let dest = path.join(backupDir, path.basename(file));
+  if (fs.existsSync(dest)) dest = path.join(backupDir, `${Date.now()}-${path.basename(file)}`);
+  return dest;
 }
 
 async function scanLoginItems() {
@@ -128,8 +183,8 @@ async function scanLoginItems() {
 }
 
 /**
- * What b_jobs can read: "Open at Login" apps (via System Events) and the user's
- * LaunchAgents. Items that apps register themselves (SMAppService) are kept by macOS
+ * What b_jobs can read: "Open at Login" apps (via System Events), the user's LaunchAgents
+ * and /Library/LaunchAgents (admin password to change). Items that apps register themselves (SMAppService) are kept by macOS
  * where a normal process can't read them, so the UI says some may be missing.
  */
 export async function scanStartup() {
@@ -144,13 +199,10 @@ export async function disableStartupItem(item, backupDir) {
     await jxa('function run(a){Application("System Events").loginItems.byName(a[0]).delete()}', [item.data.name]);
     return { kind: 'login', name: item.data.name, path: item.data.path, hidden: !!item.data.hidden };
   }
-  if (item.source === 'agent') {
-    // Moving the plist away stops it from loading at the next login.
-    fs.mkdirSync(backupDir, { recursive: true });
-    let dest = path.join(backupDir, path.basename(item.data.file));
-    if (fs.existsSync(dest)) dest = path.join(backupDir, `${Date.now()}-${path.basename(item.data.file)}`);
-    fs.renameSync(item.data.file, dest);
-    return { kind: 'agent', from: item.data.file, to: dest };
+  if (item.source === 'agent' || item.source === 'sysagent') {
+    const dest = backupPath(backupDir, item.data.file);
+    await movePlist(item.data.file, dest, item.data.admin);
+    return { kind: 'agent', from: item.data.file, to: dest, admin: Boolean(item.data.admin) };
   }
   throw new Error(`unknown source ${item.source}`);
 }
@@ -162,8 +214,7 @@ export async function restoreStartupItem(backup) {
     return;
   }
   if (backup.kind === 'agent') {
-    if (fs.existsSync(backup.from)) throw new Error('A file with the same name is already there');
-    fs.renameSync(backup.to, backup.from);
+    await movePlist(backup.to, backup.from, Boolean(backup.admin));
     return;
   }
   throw new Error(`unknown backup ${backup.kind}`);

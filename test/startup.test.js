@@ -157,3 +157,36 @@ test('taskToItem carries the admin flags', () => {
   assert.equal(item.highest, false);
   assert.equal(item.data.admin, true);
 });
+
+test('a /Library LaunchAgent needs admin and is marked as all-users', async () => {
+  const { agentToItem } = await import('../agent/platform/darwin.js');
+  const sys = agentToItem({ Label: 'com.vendor.helper', ProgramArguments: ['/Applications/Vendor.app/helper', '--bg'], RunAtLoad: true },
+    '/Library/LaunchAgents/com.vendor.helper.plist', { system: true });
+  assert.equal(sys.key, 'sysagent:com.vendor.helper.plist');
+  assert.equal(sys.source, 'sysagent');
+  assert.equal(sys.command, '/Applications/Vendor.app/helper --bg');
+  assert.equal(sys.needsAdmin, true);
+  assert.equal(sys.allUsers, true);
+  assert.equal(sys.data.admin, true);
+
+  const user = agentToItem({ Label: 'me.tool', Program: '/Users/me/My Tools/run', KeepAlive: true }, '/Users/me/Library/LaunchAgents/me.tool.plist');
+  assert.equal(user.key, 'agent:me.tool.plist');
+  assert.equal(user.command, "'/Users/me/My Tools/run'");
+  assert.equal(user.needsAdmin, false);
+});
+
+test('LaunchAgents that do not start at login are left out', async () => {
+  const { agentToItem } = await import('../agent/platform/darwin.js');
+  assert.equal(agentToItem({ Label: 'a', Program: '/x', RunAtLoad: false }, '/L/a.plist'), null);
+  assert.equal(agentToItem({ Label: 'b', Program: '/x', RunAtLoad: true, Disabled: true }, '/L/b.plist'), null);
+  assert.equal(agentToItem({ Label: 'c', RunAtLoad: true }, '/L/c.plist'), null);
+});
+
+test('the list passes the all-users flag through', async () => {
+  const { importer, fake, runner } = setup();
+  fake.entries.set('sysagent:x.plist', { key: 'sysagent:x.plist', name: 'x', source: 'sysagent', command: '/x', needsAdmin: true, allUsers: true });
+  const item = (await importer.list()).items.find((i) => i.key === 'sysagent:x.plist');
+  assert.equal(item.allUsers, true);
+  assert.equal(item.needsAdmin, true);
+  runner.shutdown();
+});

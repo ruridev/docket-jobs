@@ -155,7 +155,7 @@ function renderImport() {
     </div>`;
   const rows = [
     ...s.items.map((i) => `<div class="row">
-      ${nameBlock(i.name, [i.needsAdmin && T.needsAdmin, i.highest && T.losesAdmin].filter(Boolean))}
+      ${nameBlock(i.name, [i.needsAdmin && T.needsAdmin, i.highest && T.losesAdmin, i.allUsers && T.allUsers].filter(Boolean))}
       <button class="btn" data-action="importItem" data-id="${esc(i.key)}"${busy(i.key)}>${esc(T.importBtn)}</button>
     </div>`),
     ...s.imported.map((i) => `<div class="row">
