@@ -225,3 +225,16 @@ test('a manual item imports only after the user switched it off, and undo says t
   assert.equal(store.jobs.length, 0);
   runner.shutdown();
 });
+
+test('an older-style login helper inside an app is a manual item too', async () => {
+  const { appHelperToItem } = await import('../agent/platform/darwin.js');
+  const item = appHelperToItem('com.skitch.SkitchHelper', '/Applications/Skitch.app',
+    '/Applications/Skitch.app/Contents/Library/LoginItems/Skitch Helper.app');
+  assert.equal(item.key, 'apphelper:com.skitch.SkitchHelper');
+  assert.equal(item.name, 'Skitch');
+  assert.equal(item.source, 'appagent');
+  assert.equal(item.manual, true);
+  assert.equal(item.data.label, 'com.skitch.SkitchHelper');
+  assert.equal(item.command, "open '/Applications/Skitch.app/Contents/Library/LoginItems/Skitch Helper.app'");
+  assert.equal(appHelperToItem(undefined, '/Applications/X.app', '/h'), null);
+});

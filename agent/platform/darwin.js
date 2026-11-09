@@ -217,24 +217,49 @@ export function appAgentToItem(p, appPath, plistFile) {
   };
 }
 
+/**
+ * Older-style login helper: a small app in Contents/Library/LoginItems that the main app
+ * switches on with SMLoginItemSetEnabled. launchd loads it under its bundle id.
+ * Same manual flow as app agents: the user switches it off in System Settings.
+ */
+export function appHelperToItem(bundleId, appPath, helperPath) {
+  if (!bundleId) return null;
+  const app = path.posix.basename(appPath, '.app');
+  return {
+    key: `apphelper:${bundleId}`, name: app, label: bundleId, source: 'appagent',
+    command: `open ${shq(helperPath)}`, cwd: '', manual: true,
+    data: { label: bundleId, app, file: helperPath },
+  };
+}
+
+async function readPlistJson(file) {
+  return JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', file])).stdout);
+}
+
+function listDir(dir, ext) {
+  try { return fs.readdirSync(dir).filter((f) => f.endsWith(ext)); } catch { return []; }
+}
+
 async function scanAppAgents(includeInactive) {
   const loaded = await loadedLabels();
   const items = [];
+  // Only items that are on (loaded) are listed; switched-off ones don't start anyway.
+  const keep = (item) => { if (item && (includeInactive || loaded.has(item.label))) items.push(item); };
   for (const dir of APP_DIRS) {
-    let apps = [];
-    try { apps = fs.readdirSync(dir).filter((a) => a.endsWith('.app')); } catch { continue; }
-    for (const a of apps) {
+    for (const a of listDir(dir, '.app')) {
       const appPath = path.join(dir, a);
       const agentDir = path.join(appPath, 'Contents', 'Library', 'LaunchAgents');
-      let files = [];
-      try { files = fs.readdirSync(agentDir).filter((f) => f.endsWith('.plist')); } catch { continue; }
-      for (const f of files) {
+      for (const f of listDir(agentDir, '.plist')) {
         const file = path.join(agentDir, f);
-        let p;
-        try { p = JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', file])).stdout); } catch { continue; }
-        const item = appAgentToItem(p, appPath, file);
-        // Only agents that are on (loaded) are listed; switched-off ones don't start anyway.
-        if (item && (includeInactive || loaded.has(item.label))) items.push(item);
+        try { keep(appAgentToItem(await readPlistJson(file), appPath, file)); } catch { /* unreadable plist */ }
+      }
+      const helperDir = path.join(appPath, 'Contents', 'Library', 'LoginItems');
+      for (const h of listDir(helperDir, '.app')) {
+        const helperPath = path.join(helperDir, h);
+        try {
+          const info = await readPlistJson(path.join(helperPath, 'Contents', 'Info.plist'));
+          keep(appHelperToItem(info.CFBundleIdentifier, appPath, helperPath));
+        } catch { /* no Info.plist */ }
       }
     }
   }
