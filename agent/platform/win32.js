@@ -117,22 +117,37 @@ function disabledByTaskManager(sub) {
 
 /* Task Scheduler: only tasks the user registered (run as this user, start at logon). */
 
-function powershell(script, env = {}) {
+function powershell(script, env = {}, timeout = 30000) {
   return runAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
     `[Console]::OutputEncoding=[Text.Encoding]::UTF8; $ErrorActionPreference='Stop'; ${script}`],
-  { windowsHide: true, timeout: 30000, env: { ...process.env, ...env }, maxBuffer: 8 * 1024 * 1024 });
+  { windowsHide: true, timeout, env: { ...process.env, ...env }, maxBuffer: 8 * 1024 * 1024 });
 }
 
+// needsAdmin: the task file only lets Administrators write, which happens when an installer
+// registered the task from an elevated process. The non-elevated token can't change it.
 const LIST_TASKS = `
 $me = [Security.Principal.WindowsIdentity]::GetCurrent()
 $ids = @($me.Name, $env:USERNAME, $me.User.Value)
+# Groups leaves out deny-only groups, so a filtered admin token does not count as Administrators.
+$sids = @($me.User.Value) + @($me.Groups | ForEach-Object { $_.Value })
+$write = [Security.AccessControl.FileSystemRights]::Write
 $out = @(Get-ScheduledTask | Where-Object {
   $_.TaskPath -notlike '\\Microsoft\\*' -and $_.State -ne 'Disabled' -and
   ($ids -contains $_.Principal.UserId) -and
   @($_.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' -and $_.Enabled }).Count -gt 0
 } | ForEach-Object {
+  $file = Join-Path "$env:SystemRoot\\System32\\Tasks" ($_.TaskPath.TrimStart('\\') + $_.TaskName)
+  $canWrite = $false
+  try {
+    foreach ($r in (Get-Acl -LiteralPath $file).Access) {
+      $sid = try { $r.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value } catch { $null }
+      if ($r.AccessControlType -eq 'Allow' -and ($sids -contains $sid) -and (($r.FileSystemRights -band $write) -eq $write)) { $canWrite = $true }
+    }
+  } catch { $canWrite = $true }
   [pscustomobject]@{
     path = $_.TaskPath; name = $_.TaskName
+    needsAdmin = -not $canWrite
+    highest = ($_.Principal.RunLevel -eq 'Highest')
     actions = @($_.Actions | ForEach-Object { [pscustomobject]@{ exe = $_.Execute; args = $_.Arguments; cwd = $_.WorkingDirectory } })
     delay = @($_.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' } | ForEach-Object { $_.Delay }) -join ''
   }
@@ -163,7 +178,8 @@ export function taskToItem(task) {
   return {
     key: `task:${task.path}${task.name}`, name: task.name, source: 'task', command: cmd,
     cwd: expandEnv(actions[0].cwd), delay: isoDurationSeconds(task.delay),
-    data: { path: task.path, name: task.name },
+    needsAdmin: Boolean(task.needsAdmin), highest: Boolean(task.highest),
+    data: { path: task.path, name: task.name, admin: Boolean(task.needsAdmin) },
   };
 }
 
@@ -173,11 +189,45 @@ async function scanTasks() {
   return (Array.isArray(list) ? list : [list]).map(taskToItem).filter(Boolean);
 }
 
-async function setTaskEnabled(path_, name, enabled) {
-  // Names go through env vars so nothing in them is read as PowerShell code.
+const psQuote = (s) => `'${String(s).replace(/'/g, "''")}'`;
+const UAC_WAIT_MS = 180000;
+
+function startupError(code, cause) {
+  return Object.assign(new Error(code), { code, cause });
+}
+
+async function setTaskEnabled(path_, name, enabled, admin = false) {
   const verb = enabled ? 'Enable-ScheduledTask' : 'Disable-ScheduledTask';
-  await powershell(`${verb} -TaskPath $env:BJ_TASK_PATH -TaskName $env:BJ_TASK_NAME | Out-Null`,
-    { BJ_TASK_PATH: path_, BJ_TASK_NAME: name });
+  if (!admin) {
+    // Names go through env vars so nothing in them is read as PowerShell code.
+    try {
+      await powershell(`${verb} -TaskPath $env:BJ_TASK_PATH -TaskName $env:BJ_TASK_NAME | Out-Null`,
+        { BJ_TASK_PATH: path_, BJ_TASK_NAME: name });
+    } catch (err) {
+      throw startupError('change_failed', err);
+    }
+    return;
+  }
+
+  // Elevated: Windows shows the UAC prompt for this one command. An elevated process does
+  // not get our environment, so the names are passed as single-quoted literals inside an
+  // -EncodedCommand (quotes doubled), which PowerShell never evaluates as code.
+  const inner = `try { ${verb} -TaskPath ${psQuote(path_)} -TaskName ${psQuote(name)} -ErrorAction Stop | Out-Null; exit 0 } catch { exit 1 }`;
+  const encoded = Buffer.from(inner, 'utf16le').toString('base64');
+  const outer = `try {
+  $p = Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -Wait -PassThru -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',$env:BJ_ENC
+} catch {
+  $e = $_.Exception
+  while ($e) { if ($e.NativeErrorCode -eq 1223) { exit 3 }; $e = $e.InnerException }
+  exit 4
+}
+exit $p.ExitCode`;
+  try {
+    await powershell(outer, { BJ_ENC: encoded }, UAC_WAIT_MS);
+  } catch (err) {
+    // 3 = the user said No on the UAC prompt (ERROR_CANCELLED).
+    throw startupError(err.code === 3 ? 'uac_cancelled' : 'admin_failed', err);
+  }
 }
 
 /**
@@ -220,8 +270,8 @@ function scanRunAndFolder() {
 export async function disableStartupItem(item, backupDir) {
   if (item.source === 'task') {
     // The task is only disabled, never deleted, so its other settings stay as they were.
-    await setTaskEnabled(item.data.path, item.data.name, false);
-    return { kind: 'task', path: item.data.path, name: item.data.name };
+    await setTaskEnabled(item.data.path, item.data.name, false, item.data.admin);
+    return { kind: 'task', path: item.data.path, name: item.data.name, admin: item.data.admin };
   }
   if (item.source === 'run') {
     const { name, type, value } = item.data;
@@ -241,7 +291,7 @@ export async function disableStartupItem(item, backupDir) {
 
 export async function restoreStartupItem(backup) {
   if (backup.kind === 'task') {
-    await setTaskEnabled(backup.path, backup.name, true);
+    await setTaskEnabled(backup.path, backup.name, true, Boolean(backup.admin));
     return;
   }
   if (backup.kind === 'run') {

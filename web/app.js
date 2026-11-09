@@ -17,6 +17,8 @@ const state = {
 
 // Reading startup items on macOS may wait for a permission prompt.
 const STARTUP_TIMEOUT_MS = 45000;
+// Import/undo may wait for someone to answer a UAC prompt.
+const STARTUP_ACTION_TIMEOUT_MS = 190000;
 
 async function loadStartup() {
   state.startup.loading = true;
@@ -35,9 +37,10 @@ async function startupAction(kind, key) {
   state.startup.error = false;
   render();
   try {
-    await api('POST', `/api/startup/${kind}`, { key }, STARTUP_TIMEOUT_MS);
-  } catch {
-    state.startup.error = true;
+    await api('POST', `/api/startup/${kind}`, { key }, STARTUP_ACTION_TIMEOUT_MS);
+  } catch (err) {
+    // error holds the server's reason code when there is one, so the message can say why.
+    state.startup.error = err.data?.error || true;
   }
   state.startup.busy = null;
   const hadError = state.startup.error;
@@ -146,13 +149,17 @@ function renderImport() {
   const T = t();
   const s = state.startup;
   const busy = (key) => (s.busy === key ? ' disabled' : '');
+  const nameBlock = (name, hints) => `<div class="grow">
+      <div class="row-name">${esc(name)}</div>
+      ${hints.length ? `<div class="row-sub">${esc(hints.join(' · '))}</div>` : ''}
+    </div>`;
   const rows = [
     ...s.items.map((i) => `<div class="row">
-      <div class="row-name grow">${esc(i.name)}</div>
+      ${nameBlock(i.name, [i.needsAdmin && T.needsAdmin, i.highest && T.losesAdmin].filter(Boolean))}
       <button class="btn" data-action="importItem" data-id="${esc(i.key)}"${busy(i.key)}>${esc(T.importBtn)}</button>
     </div>`),
     ...s.imported.map((i) => `<div class="row">
-      <div class="row-name grow">${esc(i.name)}</div>
+      ${nameBlock(i.name, i.needsAdmin ? [T.undoNeedsAdmin] : [])}
       <span class="done-label">${esc(T.imported)}</span>
       <button class="link-btn" data-action="undoItem" data-id="${esc(i.key)}"${busy(i.key)}>${esc(T.undo)}</button>
     </div>`),
@@ -165,7 +172,7 @@ function renderImport() {
   return `
     <button class="link-btn" data-action="back">${ICON_BACK}${esc(T.back)}</button>
     <div><h1>${esc(T.importTitle)}</h1><p class="sub">${esc(T.importDesc)}</p></div>
-    ${s.error ? `<p class="form-error" role="alert">${esc(T.importError)}</p>` : ''}
+    ${s.error ? `<p class="form-error" role="alert">${esc(T.startupErrors[s.error] || T.importError)}</p>` : ''}
     <div class="card" aria-busy="${s.loading}">${body}</div>
     ${notes}`;
 }

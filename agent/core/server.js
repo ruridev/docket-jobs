@@ -111,6 +111,8 @@ export function createServer({ store, runner, logs, platform, autostartSupported
         }
       } catch (err) {
         if (err.status) throw err;
+        // Known reasons the UI can explain; anything else is reported as a generic failure.
+        if (['uac_cancelled', 'admin_failed', 'change_failed'].includes(err.code)) return send(res, 409, { error: err.code });
         return send(res, 500, { error: 'startup_failed', detail: String(err.message) });
       }
     }

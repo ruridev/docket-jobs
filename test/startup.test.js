@@ -92,7 +92,7 @@ test('a logon task becomes a job with its command, folder and delay', () => {
   assert.equal(item.command, '"C:\\Program Files\\PowerShell\\pwsh.exe" -File "C:\\AI\\start.ps1"');
   assert.equal(item.cwd, 'C:\\AI');
   assert.equal(item.delay, 90);
-  assert.deepEqual(item.data, { path: '\\', name: 'Local_AI_llama_cpp' });
+  assert.deepEqual(item.data, { path: '\\', name: 'Local_AI_llama_cpp', admin: false });
 });
 
 test('tasks b_jobs cannot run, or b_jobs itself, are left out', () => {
@@ -127,4 +127,33 @@ test('parseRegQuery reads names with spaces and empty values', () => {
     { name: 'Empty', type: 'REG_SZ', value: '' },
     { name: 'Approved', type: 'REG_BINARY', value: '030000000000000000000000' },
   ]);
+});
+
+test('admin-only tasks are flagged in the list and on the imported record', async () => {
+  const { importer, fake, runner } = setup();
+  fake.entries.set('task:\\Gate', { key: 'task:\\Gate', name: 'Gate', source: 'task', command: 'gate.exe', needsAdmin: true, highest: true });
+  const before = (await importer.list()).items.find((i) => i.key === 'task:\\Gate');
+  assert.equal(before.needsAdmin, true);
+  assert.equal(before.highest, true);
+  fake.disableStartupItem = async (item) => { fake.entries.delete(item.key); return { item, admin: true }; };
+  await importer.import('task:\\Gate');
+  assert.equal((await importer.list()).imported.find((i) => i.key === 'task:\\Gate').needsAdmin, true);
+  runner.shutdown();
+});
+
+test('a cancelled UAC prompt leaves everything as it was', async () => {
+  const { store, importer, fake, runner } = setup();
+  fake.disableStartupItem = async () => { throw Object.assign(new Error('uac_cancelled'), { code: 'uac_cancelled' }); };
+  await assert.rejects(importer.import('run:Steam'), { code: 'uac_cancelled' });
+  assert.equal(store.jobs.length, 0);
+  assert.equal((await importer.list()).imported.length, 0);
+  assert.equal(fake.entries.has('run:Steam'), true);
+  runner.shutdown();
+});
+
+test('taskToItem carries the admin flags', () => {
+  const item = taskToItem({ path: '\\', name: 'T', needsAdmin: true, highest: false, actions: [{ exe: 'a.exe', args: '', cwd: '' }] });
+  assert.equal(item.needsAdmin, true);
+  assert.equal(item.highest, false);
+  assert.equal(item.data.admin, true);
 });

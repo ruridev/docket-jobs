@@ -25,8 +25,10 @@ export class StartupImporter {
     const scan = await this.platform.scanStartup();
     const taken = new Set(this.records.map((r) => r.key));
     return {
-      items: scan.items.filter((i) => !taken.has(i.key)).map(({ key, name, source }) => ({ key, name, source })),
-      imported: this.records.map(({ key, name, source, jobId }) => ({ key, name, source, jobId })),
+      items: scan.items.filter((i) => !taken.has(i.key)).map(({ key, name, source, needsAdmin, highest }) =>
+        ({ key, name, source, needsAdmin: Boolean(needsAdmin), highest: Boolean(highest) })),
+      imported: this.records.map(({ key, name, source, jobId, backup }) =>
+        ({ key, name, source, jobId, needsAdmin: Boolean(backup?.admin) })),
       notes: scan.notes || [],
     };
   }

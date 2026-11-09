@@ -17,6 +17,12 @@ export const I18N = {
     importDesc: '가져오면 원래 등록은 꺼지고, 다음 부팅부터 b_jobs가 대신 실행해요. 언제든 되돌릴 수 있어요.',
     importBtn: '가져오기', imported: '가져옴', undo: '되돌리기', loading: '불러오는 중…',
     importEmpty: '가져올 수 있는 시작 항목이 없어요.', importError: '처리하지 못했어요. 다시 시도해 주세요.',
+    needsAdmin: '관리자 확인 창이 떠요', losesAdmin: '가져오면 관리자 권한 없이 실행돼요', undoNeedsAdmin: '되돌릴 때 관리자 확인 창이 떠요',
+    startupErrors: {
+      uac_cancelled: '관리자 확인 창에서 취소해서 바꾸지 않았어요.',
+      admin_failed: '관리자 권한으로도 바꾸지 못했어요. 작업 스케줄러에서 직접 확인해 주세요.',
+      change_failed: '권한이 없어서 원래 등록을 바꾸지 못했어요.',
+    },
     notes: {
       macPartial: '앱이 직접 등록한 일부 백그라운드 항목은 여기에 보이지 않아요. 시스템 설정 → 일반 → 로그인 항목에서 확인하세요.',
       loginPermission: '“로그인 시 열기” 항목을 읽으려면 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 자동화에서 허용한 뒤 다시 열어 주세요.',
@@ -54,6 +60,12 @@ export const I18N = {
     importDesc: 'Importing turns off the original entry, and b_jobs runs it from the next startup. You can undo this anytime.',
     importBtn: 'Import', imported: 'Imported', undo: 'Undo', loading: 'Loading…',
     importEmpty: 'No startup items to import.', importError: 'Something went wrong. Please try again.',
+    needsAdmin: 'Asks for admin approval', losesAdmin: 'Runs without admin rights once imported', undoNeedsAdmin: 'Undo asks for admin approval',
+    startupErrors: {
+      uac_cancelled: 'The admin prompt was cancelled, so nothing was changed.',
+      admin_failed: 'Couldn’t change it even with admin rights. Please check it in Task Scheduler.',
+      change_failed: 'Couldn’t change the original entry (no permission).',
+    },
     notes: {
       macPartial: 'Some background items that apps register themselves don’t appear here. Check System Settings → General → Login Items.',
       loginPermission: 'Reading “Open at Login” items needs permission. Allow it in System Settings → Privacy & Security → Automation, then reopen this page.',
@@ -91,6 +103,12 @@ export const I18N = {
     importDesc: '取り込むと元の登録は無効になり、次回の起動からb_jobsが代わりに実行します。いつでも元に戻せます。',
     importBtn: '取り込む', imported: '取り込み済み', undo: '元に戻す', loading: '読み込み中…',
     importEmpty: '取り込めるスタートアップ項目はありません。', importError: '処理できませんでした。もう一度お試しください。',
+    needsAdmin: '管理者の確認が表示されます', losesAdmin: '取り込むと管理者権限なしで実行されます', undoNeedsAdmin: '元に戻すときに管理者の確認が表示されます',
+    startupErrors: {
+      uac_cancelled: '管理者の確認がキャンセルされたため、変更していません。',
+      admin_failed: '管理者権限でも変更できませんでした。タスク スケジューラで確認してください。',
+      change_failed: '権限がないため、元の登録を変更できませんでした。',
+    },
     notes: {
       macPartial: 'アプリが独自に登録した一部のバックグラウンド項目はここに表示されません。システム設定 → 一般 → ログイン項目で確認してください。',
       loginPermission: '「ログイン時に開く」項目を読み取るには許可が必要です。システム設定 → プライバシーとセキュリティ → オートメーションで許可してから、このページを開き直してください。',
