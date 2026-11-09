@@ -260,10 +260,12 @@ async function scanAppAgents(includeInactive) {
   const loaded = await loadedLabels();
   const overrides = await launchdOverrides();
   const items = [];
-  // Only items that are on are listed; switched-off ones don't start anyway. "On" is either
-  // loaded right now, or set to start at login (`=> enabled`): a login helper such as
-  // Skitch's starts its app at login and exits, so it is usually not loaded afterwards.
-  const isOn = (label) => !overrides.off.has(label) && (loaded.has(label) || overrides.on.has(label));
+  // Only items that are surely on are listed: loaded in launchd right now. A launchd override
+  // of `=> enabled` is NOT enough: the System Settings switch is kept in a root-only database
+  // and doesn't change it (checked on a Mac: switched-off helpers still say enabled). So a
+  // login helper that starts its app and exits (e.g. Skitch) may be missing; the UI says to
+  // add such an app by hand.
+  const isOn = (label) => !overrides.off.has(label) && loaded.has(label);
   const keep = (item) => { if (item && (includeInactive || isOn(item.label))) items.push(item); };
   for (const dir of APP_DIRS) {
     for (const a of listDir(dir, '.app')) {

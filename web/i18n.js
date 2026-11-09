@@ -30,7 +30,7 @@ export const I18N = {
       change_failed: '권한이 없어서 원래 등록을 바꾸지 못했어요.',
     },
     notes: {
-      macPartial: '시스템 서비스(LaunchDaemons)처럼 b_jobs가 대신 실행할 수 없는 항목은 여기에 보이지 않아요.',
+      macPartial: '시스템 서비스나 정해진 시간에만 도는 업데이트 확인처럼 b_jobs가 대신할 수 없는 항목은 보이지 않아요. 켜져 있는지 확실히 알 수 없는 일부 앱도 빠질 수 있으니, 그런 앱은 작업 추가로 직접 넣어 주세요(예: open -a "앱 이름").',
       loginPermission: '“로그인 시 열기” 항목을 읽으려면 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 자동화에서 허용한 뒤 다시 열어 주세요.',
       unsupported: '이 OS에서는 아직 지원하지 않아요.',
       tasksUnreadable: '작업 스케줄러 목록을 읽지 못해서 그쪽 항목은 빠져 있어요.',
@@ -79,7 +79,7 @@ export const I18N = {
       change_failed: 'Couldn’t change the original entry (no permission).',
     },
     notes: {
-      macPartial: 'Items b_jobs can’t run in their place, such as system services (LaunchDaemons), don’t appear here.',
+      macPartial: 'Items b_jobs can’t run in their place, such as system services or scheduled update checks, don’t appear here. Some apps whose on/off state can’t be read are also left out; add those with Add job (e.g. open -a "App Name").',
       loginPermission: 'Reading “Open at Login” items needs permission. Allow it in System Settings → Privacy & Security → Automation, then reopen this page.',
       unsupported: 'Not supported on this OS yet.',
       tasksUnreadable: 'Couldn’t read Task Scheduler, so its items are missing.',
@@ -128,7 +128,7 @@ export const I18N = {
       change_failed: '権限がないため、元の登録を変更できませんでした。',
     },
     notes: {
-      macPartial: 'システムサービス（LaunchDaemons）など、b_jobsが代わりに実行できない項目はここに表示されません。',
+      macPartial: 'システムサービスや定期的な更新チェックなど、b_jobsが代わりに実行できない項目は表示されません。オン・オフを確認できない一部のアプリも表示されないため、その場合は「ジョブを追加」で直接追加してください（例: open -a "アプリ名"）。',
       loginPermission: '「ログイン時に開く」項目を読み取るには許可が必要です。システム設定 → プライバシーとセキュリティ → オートメーションで許可してから、このページを開き直してください。',
       unsupported: 'このOSではまだ対応していません。',
       tasksUnreadable: 'タスク スケジューラを読み取れなかったため、その項目は表示されていません。',
