@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>b_jobs</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <svg class="logo" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#16181D"></rect><path d="M10 11h12M10 16h12M10 21h7" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"></path></svg>
+    <a class="brand" href="#" data-action="home">b_jobs</a>
+    <span id="agentStatus" class="agent-status" role="status"></span>
+    <button class="icon-btn" data-action="settings" data-i18n-label="settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+    </button>
+  </div>
+</header>
+
+<main id="view" class="wrap main"></main>
+
+<dialog id="jobDialog" class="dialog">
+  <form id="jobForm" method="dialog" novalidate>
+    <h2 id="jobDialogTitle" class="dialog-title"></h2>
+    <div class="dialog-body">
+      <div class="field">
+        <label for="f-name" data-i18n="fName"></label>
+        <input id="f-name" name="name" autocomplete="off" data-i18n-ph="fNamePh">
+      </div>
+      <div class="field">
+        <label for="f-command" data-i18n="fCmd"></label>
+        <input id="f-command" name="command" class="mono" autocomplete="off" spellcheck="false" data-i18n-ph="fCmdPh">
+      </div>
+      <button type="button" class="link-btn adv-toggle" data-action="toggleAdv" aria-expanded="false" aria-controls="advFields">
+        <span data-i18n="adv"></span>
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      </button>
+      <div id="advFields" class="adv" hidden>
+        <div class="field">
+          <label for="f-cwd" data-i18n="fCwd"></label>
+          <input id="f-cwd" name="cwd" class="mono" autocomplete="off" spellcheck="false" data-i18n-ph="fCwdPh">
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="f-delay" data-i18n="fDelay"></label>
+            <input id="f-delay" name="delay" type="number" min="0" max="3600" step="1">
+          </div>
+          <div class="field">
+            <label for="f-restart" data-i18n="fRestart"></label>
+            <select id="f-restart" name="restart">
+              <option value="0" data-i18n="r0"></option>
+              <option value="3" data-i18n="r3"></option>
+              <option value="always" data-i18n="rAlways"></option>
+            </select>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" name="hidden"><span data-i18n="fHidden"></span></label>
+      </div>
+      <p id="jobFormError" class="form-error" role="alert" hidden></p>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn" data-action="closeDialog" data-i18n="cancel"></button>
+      <button type="submit" class="btn primary" data-i18n="save"></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="delDialog" class="dialog small">
+  <form method="dialog">
+    <h2 id="delQuestion" class="dialog-title"></h2>
+    <div class="dialog-actions">
+      <button type="button" class="btn" data-action="closeDialog" data-i18n="cancel"></button>
+      <button type="button" class="btn danger" data-action="confirmDelete" data-i18n="del"></button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>
