@@ -108,6 +108,9 @@ h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .done-label { font-size: 14px; font-weight: 600; color: var(--running); }
 .note { margin: 0; font-size: 13px; color: var(--ink-3); }
 .row-sub { font-size: 13px; color: var(--ink-3); }
+.manual-steps { display: flex; flex-direction: column; gap: 10px; padding: 0 16px 14px; }
+.manual-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.notice { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink); }
 .empty { padding: 48px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--ink-3); text-align: center; }
 
 /* Detail */

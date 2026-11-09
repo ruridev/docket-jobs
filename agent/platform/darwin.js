@@ -182,16 +182,85 @@ async function scanLoginItems() {
   }));
 }
 
+/* Agents that apps keep inside their bundle and register with SMAppService. Their on/off
+ * switch lives in macOS's background-items database (root only), and Apple lets only the
+ * user change it in System Settings. b_jobs can list them and take over once the user has
+ * switched them off there ("manual" items). */
+
+const APP_DIRS = ['/Applications', path.join(os.homedir(), 'Applications')];
+const LOGIN_ITEMS_SETTINGS = 'x-apple.systempreferences:com.apple.LoginItems-Settings.extension';
+
+/** Labels launchd has loaded for this user. An app agent switched off in Settings is not loaded. */
+async function loadedLabels() {
+  try {
+    const { stdout } = await run('launchctl', ['list']);
+    return new Set(stdout.split('\n').slice(1).map((l) => l.split('\t')[2]).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
+/** Turns an agent plist found inside an app bundle into a startup item, or null. */
+export function appAgentToItem(p, appPath, plistFile) {
+  if (!p || !p.Label) return null;
+  const rest = Array.isArray(p.ProgramArguments) ? p.ProgramArguments.slice(1) : [];
+  let argv;
+  if (p.BundleProgram) argv = [path.posix.join(appPath, p.BundleProgram), ...rest];
+  else if (p.Program) argv = [p.Program, ...rest];
+  else if (Array.isArray(p.ProgramArguments) && p.ProgramArguments.length) argv = p.ProgramArguments;
+  else return null;
+  const app = path.posix.basename(appPath, '.app');
+  return {
+    key: `appagent:${p.Label}`, name: app, label: p.Label, source: 'appagent',
+    command: argv.map(shq).join(' '), cwd: '', manual: true,
+    data: { label: p.Label, app, file: plistFile },
+  };
+}
+
+async function scanAppAgents(includeInactive) {
+  const loaded = await loadedLabels();
+  const items = [];
+  for (const dir of APP_DIRS) {
+    let apps = [];
+    try { apps = fs.readdirSync(dir).filter((a) => a.endsWith('.app')); } catch { continue; }
+    for (const a of apps) {
+      const appPath = path.join(dir, a);
+      const agentDir = path.join(appPath, 'Contents', 'Library', 'LaunchAgents');
+      let files = [];
+      try { files = fs.readdirSync(agentDir).filter((f) => f.endsWith('.plist')); } catch { continue; }
+      for (const f of files) {
+        const file = path.join(agentDir, f);
+        let p;
+        try { p = JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', file])).stdout); } catch { continue; }
+        const item = appAgentToItem(p, appPath, file);
+        // Only agents that are on (loaded) are listed; switched-off ones don't start anyway.
+        if (item && (includeInactive || loaded.has(item.label))) items.push(item);
+      }
+    }
+  }
+  // One app with several agents: tell them apart by label.
+  const count = {};
+  for (const i of items) count[i.name] = (count[i.name] || 0) + 1;
+  for (const i of items) if (count[i.name] > 1) i.name = `${i.name} · ${i.label}`;
+  return items;
+}
+
+export async function openStartupSettings() {
+  await run('open', [LOGIN_ITEMS_SETTINGS]);
+}
+
 /**
- * What b_jobs can read: "Open at Login" apps (via System Events), the user's LaunchAgents
- * and /Library/LaunchAgents (admin password to change). Items that apps register themselves (SMAppService) are kept by macOS
- * where a normal process can't read them, so the UI says some may be missing.
+ * What b_jobs can read: "Open at Login" apps (via System Events), the user's LaunchAgents,
+ * /Library/LaunchAgents (admin password to change) and agents inside apps (switched off by
+ * the user in System Settings). LaunchDaemons are left out on purpose.
+ * `all` also returns app agents that are switched off, so an import can find the item
+ * right after the user has turned it off.
  */
-export async function scanStartup() {
+export async function scanStartup({ all = false } = {}) {
   const notes = ['macPartial'];
   let login = [];
   try { login = await scanLoginItems(); } catch { notes.unshift('loginPermission'); }
-  return { items: [...login, ...(await scanLaunchAgents())], notes };
+  return { items: [...login, ...(await scanLaunchAgents()), ...(await scanAppAgents(all))], notes };
 }
 
 export async function disableStartupItem(item, backupDir) {
@@ -203,6 +272,13 @@ export async function disableStartupItem(item, backupDir) {
     const dest = backupPath(backupDir, item.data.file);
     await movePlist(item.data.file, dest, item.data.admin);
     return { kind: 'agent', from: item.data.file, to: dest, admin: Boolean(item.data.admin) };
+  }
+  if (item.source === 'appagent') {
+    // b_jobs can't switch it off; the user does that in System Settings first.
+    if ((await loadedLabels()).has(item.data.label)) {
+      throw Object.assign(new Error('still_enabled'), { code: 'still_enabled' });
+    }
+    return { kind: 'manual', label: item.data.label, app: item.data.app };
   }
   throw new Error(`unknown source ${item.source}`);
 }
@@ -216,6 +292,10 @@ export async function restoreStartupItem(backup) {
   if (backup.kind === 'agent') {
     await movePlist(backup.to, backup.from, Boolean(backup.admin));
     return;
+  }
+  if (backup.kind === 'manual') {
+    // Only the user can switch it back on in System Settings; the UI tells them so.
+    return { manual: true };
   }
   throw new Error(`unknown backup ${backup.kind}`);
 }

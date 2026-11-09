@@ -103,6 +103,11 @@ export function createServer({ store, runner, logs, platform, autostartSupported
     if (parts[0] === 'startup' && importer) {
       try {
         if (parts.length === 1 && method === 'GET') return send(res, 200, await importer.list());
+        if (parts.length === 2 && parts[1] === 'open-settings' && method === 'POST') {
+          if (!platform.openStartupSettings) return send(res, 400, { error: 'unsupported' });
+          await platform.openStartupSettings();
+          return send(res, 200, { ok: true });
+        }
         if (parts.length === 2 && method === 'POST' && (parts[1] === 'import' || parts[1] === 'undo')) {
           const { key } = await readBody(req);
           if (typeof key !== 'string') return send(res, 400, { error: 'invalid' });
@@ -112,7 +117,7 @@ export function createServer({ store, runner, logs, platform, autostartSupported
       } catch (err) {
         if (err.status) throw err;
         // Known reasons the UI can explain; anything else is reported as a generic failure.
-        if (['uac_cancelled', 'admin_failed', 'change_failed'].includes(err.code)) return send(res, 409, { error: err.code });
+        if (['uac_cancelled', 'admin_failed', 'change_failed', 'still_enabled'].includes(err.code)) return send(res, 409, { error: err.code });
         return send(res, 500, { error: 'startup_failed', detail: String(err.message) });
       }
     }

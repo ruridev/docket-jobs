@@ -12,7 +12,9 @@ const state = {
   editId: null,
   delId: null,
   settingsError: false,
-  startup: { loading: false, items: [], imported: [], notes: [], error: false, busy: null },
+  // manualKey: the macOS app agent whose "switch it off in System Settings" steps are open.
+  // notice: name of an item that was undone but must be switched back on by the user.
+  startup: { loading: false, items: [], imported: [], notes: [], error: false, busy: null, manualKey: null, notice: null },
 };
 
 // Reading startup items on macOS may wait for a permission prompt.
@@ -35,9 +37,12 @@ async function loadStartup() {
 async function startupAction(kind, key) {
   state.startup.busy = key;
   state.startup.error = false;
+  state.startup.notice = null;
   render();
   try {
-    await api('POST', `/api/startup/${kind}`, { key }, STARTUP_ACTION_TIMEOUT_MS);
+    const r = await api('POST', `/api/startup/${kind}`, { key }, STARTUP_ACTION_TIMEOUT_MS);
+    if (kind === 'import') state.startup.manualKey = null;
+    if (kind === 'undo' && r.manual) state.startup.notice = r.name;
   } catch (err) {
     // error holds the server's reason code when there is one, so the message can say why.
     state.startup.error = err.data?.error || true;
@@ -153,13 +158,27 @@ function renderImport() {
       <div class="row-name">${esc(name)}</div>
       ${hints.length ? `<div class="row-sub">${esc(hints.join(' · '))}</div>` : ''}
     </div>`;
+  // macOS app agents: the user switches them off in System Settings, then b_jobs takes over.
+  const manualSteps = (i) => `<div class="manual-steps">
+      <p class="note">${esc(T.manualSteps(i.name))}</p>
+      <div class="manual-actions">
+        <button class="btn" data-action="openLoginSettings">${esc(T.openSettings)}</button>
+        <button class="btn primary" data-action="importItem" data-id="${esc(i.key)}"${busy(i.key)}>${esc(T.manualDone)}</button>
+        <button class="link-btn" data-action="manualCancel">${esc(T.cancel)}</button>
+      </div>
+    </div>`;
   const rows = [
-    ...s.items.map((i) => `<div class="row">
-      ${nameBlock(i.name, [i.needsAdmin && T.needsAdmin, i.highest && T.losesAdmin, i.allUsers && T.allUsers].filter(Boolean))}
-      <button class="btn" data-action="importItem" data-id="${esc(i.key)}"${busy(i.key)}>${esc(T.importBtn)}</button>
-    </div>`),
+    ...s.items.map((i) => {
+      const open = i.manual && s.manualKey === i.key;
+      const hints = [i.needsAdmin && T.needsAdmin, i.highest && T.losesAdmin, i.allUsers && T.allUsers, i.manual && T.manualHint].filter(Boolean);
+      const action = i.manual ? 'manualStart' : 'importItem';
+      return `<div class="row">
+      ${nameBlock(i.name, hints)}
+      ${open ? '' : `<button class="btn" data-action="${action}" data-id="${esc(i.key)}"${busy(i.key)}>${esc(T.importBtn)}</button>`}
+    </div>${open ? manualSteps(i) : ''}`;
+    }),
     ...s.imported.map((i) => `<div class="row">
-      ${nameBlock(i.name, i.needsAdmin ? [T.undoNeedsAdmin] : [])}
+      ${nameBlock(i.name, i.needsAdmin ? [T.undoNeedsAdmin] : i.manual ? [T.undoManualHint] : [])}
       <span class="done-label">${esc(T.imported)}</span>
       <button class="link-btn" data-action="undoItem" data-id="${esc(i.key)}"${busy(i.key)}>${esc(T.undo)}</button>
     </div>`),
@@ -173,6 +192,7 @@ function renderImport() {
     <button class="link-btn" data-action="back">${ICON_BACK}${esc(T.back)}</button>
     <div><h1>${esc(T.importTitle)}</h1><p class="sub">${esc(T.importDesc)}</p></div>
     ${s.error ? `<p class="form-error" role="alert">${esc(T.startupErrors[s.error] || T.importError)}</p>` : ''}
+    ${s.notice ? `<p class="notice" role="status">${esc(T.undoManual(s.notice))}</p>` : ''}
     <div class="card" aria-busy="${s.loading}">${body}</div>
     ${notes}`;
 }
@@ -376,6 +396,9 @@ const actions = {
     loadStartup().then(render);
   },
   importItem: (key) => startupAction('import', key),
+  manualStart: (key) => { state.startup.manualKey = key; state.startup.error = false; state.startup.notice = null; },
+  manualCancel: () => { state.startup.manualKey = null; state.startup.error = false; },
+  openLoginSettings: () => api('POST', '/api/startup/open-settings'),
   undoItem: (key) => startupAction('undo', key),
   menu: (id) => { state.menuId = state.menuId === id ? null : id; },
   edit: (id) => openJobDialog(state.jobs.find((j) => j.id === id)),

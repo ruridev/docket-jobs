@@ -190,3 +190,38 @@ test('the list passes the all-users flag through', async () => {
   assert.equal(item.needsAdmin, true);
   runner.shutdown();
 });
+
+test('an agent inside an app becomes a manual item named after the app', async () => {
+  const { appAgentToItem } = await import('../agent/platform/darwin.js');
+  const item = appAgentToItem({ Label: 'com.docker.helper', BundleProgram: 'Contents/MacOS/helper', ProgramArguments: ['helper', '--quiet'] },
+    '/Applications/Docker.app', '/Applications/Docker.app/Contents/Library/LaunchAgents/com.docker.helper.plist');
+  assert.equal(item.key, 'appagent:com.docker.helper');
+  assert.equal(item.name, 'Docker');
+  assert.equal(item.manual, true);
+  assert.match(item.command, /Docker\.app[\\/]Contents[\\/]MacOS[\\/]helper --quiet$/);
+  assert.equal(appAgentToItem({ Label: 'x' }, '/Applications/X.app', '/f'), null);
+});
+
+test('a manual item imports only after the user switched it off, and undo says to switch it back on', async () => {
+  const { store, importer, fake, runner } = setup();
+  fake.entries.set('appagent:com.x', { key: 'appagent:com.x', name: 'X', source: 'appagent', command: '/x', manual: true });
+  let stillOn = true;
+  fake.disableStartupItem = async (item) => {
+    if (stillOn) throw Object.assign(new Error('still_enabled'), { code: 'still_enabled' });
+    return { kind: 'manual', item };
+  };
+  fake.restoreStartupItem = async () => ({ manual: true });
+
+  assert.equal((await importer.list()).items.find((i) => i.key === 'appagent:com.x').manual, true);
+  await assert.rejects(importer.import('appagent:com.x'), { code: 'still_enabled' });
+  assert.equal(store.jobs.length, 0);
+
+  stillOn = false;
+  assert.equal((await importer.import('appagent:com.x')).job.name, 'X');
+  assert.equal((await importer.list()).imported.find((i) => i.key === 'appagent:com.x').manual, true);
+
+  const r = await importer.undo('appagent:com.x');
+  assert.deepEqual(r, { ok: true, manual: true, name: 'X' });
+  assert.equal(store.jobs.length, 0);
+  runner.shutdown();
+});
