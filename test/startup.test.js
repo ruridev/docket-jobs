@@ -238,3 +238,17 @@ test('an older-style login helper inside an app is a manual item too', async () 
   assert.equal(item.command, "open '/Applications/Skitch.app/Contents/Library/LoginItems/Skitch Helper.app'");
   assert.equal(appHelperToItem(undefined, '/Applications/X.app', '/h'), null);
 });
+
+test('launchd overrides are read in both old and new formats', async () => {
+  const { parseLaunchdOverrides } = await import('../agent/platform/darwin.js');
+  const { on, off } = parseLaunchdOverrides([
+    'disabled services = {',
+    '\t"J8RPQ294UB.com.skitch.SkitchHelper" => enabled',
+    '\t"com.vendor.off" => disabled',
+    '\t"com.old.on" => false',
+    '\t"com.old.off" => true',
+    '}',
+  ].join('\n'));
+  assert.deepEqual([...on].sort(), ['J8RPQ294UB.com.skitch.SkitchHelper', 'com.old.on']);
+  assert.deepEqual([...off].sort(), ['com.old.off', 'com.vendor.off']);
+});

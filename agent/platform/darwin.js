@@ -86,15 +86,31 @@ function jxa(script, args = [], timeout = 30000) {
   return run('osascript', ['-l', 'JavaScript', '-e', script, ...args], { timeout });
 }
 
-async function disabledLabels() {
+/**
+ * Parses `launchctl print-disabled` output into { on, off } label sets. Newer macOS prints
+ * `=> enabled` / `=> disabled`; older prints `=> false` / `=> true` (true = disabled).
+ */
+export function parseLaunchdOverrides(text) {
+  const on = new Set();
   const off = new Set();
+  for (const m of String(text).matchAll(/"([^"]+)"\s*=>\s*(\w+)/g)) {
+    if (m[2] === 'disabled' || m[2] === 'true') off.add(m[1]);
+    else if (m[2] === 'enabled' || m[2] === 'false') on.add(m[1]);
+  }
+  return { on, off };
+}
+
+async function launchdOverrides() {
   try {
     const { stdout } = await run('launchctl', ['print-disabled', `gui/${process.getuid()}`]);
-    for (const m of stdout.matchAll(/"([^"]+)"\s*=>\s*(\w+)/g)) {
-      if (m[2] === 'disabled' || m[2] === 'true') off.add(m[1]);
-    }
-  } catch { /* treat all as enabled */ }
-  return off;
+    return parseLaunchdOverrides(stdout);
+  } catch {
+    return { on: new Set(), off: new Set() };
+  }
+}
+
+async function disabledLabels() {
+  return (await launchdOverrides()).off;
 }
 
 // LaunchAgents for every user. Readable by anyone, but owned by root, so turning one off
@@ -242,9 +258,13 @@ function listDir(dir, ext) {
 
 async function scanAppAgents(includeInactive) {
   const loaded = await loadedLabels();
+  const overrides = await launchdOverrides();
   const items = [];
-  // Only items that are on (loaded) are listed; switched-off ones don't start anyway.
-  const keep = (item) => { if (item && (includeInactive || loaded.has(item.label))) items.push(item); };
+  // Only items that are on are listed; switched-off ones don't start anyway. "On" is either
+  // loaded right now, or set to start at login (`=> enabled`): a login helper such as
+  // Skitch's starts its app at login and exits, so it is usually not loaded afterwards.
+  const isOn = (label) => !overrides.off.has(label) && (loaded.has(label) || overrides.on.has(label));
+  const keep = (item) => { if (item && (includeInactive || isOn(item.label))) items.push(item); };
   for (const dir of APP_DIRS) {
     for (const a of listDir(dir, '.app')) {
       const appPath = path.join(dir, a);
