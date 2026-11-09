@@ -120,7 +120,8 @@ export function scanStartup() {
   const items = [];
   const runOff = disabledByTaskManager('Run');
   for (const v of regValues(RUN_KEY)) {
-    if (v.name === VALUE_NAME || runOff.has(v.name)) continue;
+    // Skip b_jobs itself, whatever name it was registered under.
+    if (v.name === VALUE_NAME || v.value.includes(AGENT_ENTRY) || runOff.has(v.name)) continue;
     if (v.type !== 'REG_SZ' && v.type !== 'REG_EXPAND_SZ') continue;
     items.push({ key: `run:${v.name}`, name: v.name, source: 'run', command: v.value, data: v });
   }

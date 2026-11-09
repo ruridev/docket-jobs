@@ -9,6 +9,8 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.json': 'application/json; charset=utf-8',
   '.ico': 'image/x-icon',
+  '.ttf': 'font/ttf',
+  '.txt': 'text/plain; charset=utf-8',
 };
 
 function send(res, code, body) {
@@ -48,8 +50,9 @@ export function createServer({ store, runner, logs, platform, autostartSupported
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
 
   const jobView = (job) => ({ ...job, ...runner.status(job.id) });
+  // Display language and theme are kept in the browser; the only server-side setting is
+  // whether the OS starts b_jobs at login.
   const settingsView = () => ({
-    ...store.settings,
     autoStart: autostartSupported ? platform.isAutostartEnabled() : false,
     autoStartSupported: autostartSupported,
   });
@@ -114,10 +117,6 @@ export function createServer({ store, runner, logs, platform, autostartSupported
 
     if (parts[0] === 'settings' && parts.length === 1 && method === 'PUT') {
       const body = await readBody(req);
-      if (body.lang !== undefined) {
-        const r = store.updateSettings({ lang: body.lang });
-        if (r.error) return send(res, 400, r);
-      }
       if (body.autoStart !== undefined) {
         if (!autostartSupported) return send(res, 400, { error: 'unsupported' });
         try {
@@ -144,7 +143,7 @@ export function createServer({ store, runner, logs, platform, autostartSupported
         'Content-Type': MIME[path.extname(file)] || 'application/octet-stream',
         'Cache-Control': 'no-cache',
         'X-Content-Type-Options': 'nosniff',
-        'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'",
+        'Content-Security-Policy': "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'",
       });
       res.end(data);
     });

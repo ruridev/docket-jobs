@@ -3,7 +3,6 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 
 export const RESTART_POLICIES = ['0', '3', 'always'];
-export const LANGS = ['en', 'ko', 'ja'];
 
 export function readJson(file, fallback) {
   try {
@@ -64,7 +63,6 @@ export function normalizeJob(input, base = null) {
 export class Store {
   constructor(dataDir) {
     this.jobsFile = path.join(dataDir, 'jobs.json');
-    this.settingsFile = path.join(dataDir, 'settings.json');
     this.stateFile = path.join(dataDir, 'state.json');
     fs.mkdirSync(dataDir, { recursive: true });
 
@@ -72,9 +70,6 @@ export class Store {
     this.jobs = (Array.isArray(raw.jobs) ? raw.jobs : [])
       .map((j) => normalizeJob(j, j?.id ? { id: String(j.id) } : null).job)
       .filter(Boolean);
-
-    const s = readJson(this.settingsFile, {});
-    this.settings = { lang: LANGS.includes(s.lang) ? s.lang : null };
   }
 
   getJob(id) {
@@ -108,15 +103,6 @@ export class Store {
 
   saveJobs() {
     writeJsonAtomic(this.jobsFile, { jobs: this.jobs });
-  }
-
-  updateSettings(patch) {
-    if (patch.lang !== undefined) {
-      if (patch.lang !== null && !LANGS.includes(patch.lang)) return { error: 'invalid', field: 'lang' };
-      this.settings.lang = patch.lang;
-    }
-    writeJsonAtomic(this.settingsFile, this.settings);
-    return { settings: this.settings };
   }
 
   /** Running processes survive an agent restart; their pids are kept here. */

@@ -3,7 +3,7 @@ import { I18N, LANGS, detectLang } from './i18n.js';
 const POLL_MS = 2000;
 const state = {
   jobs: [],
-  settings: { lang: null, autoStart: false, autoStartSupported: true },
+  settings: { autoStart: false, autoStartSupported: true },
   online: true,
   view: 'list', // list | detail | settings
   curId: null,
@@ -46,7 +46,13 @@ async function startupAction(kind, key) {
 }
 
 const $ = (sel) => document.querySelector(sel);
-const lang = () => state.settings.lang || detectLang();
+// Display language and theme are kept in this browser only (like docket).
+const LANG_KEY = 'bjobs-lang';
+function savedLang() {
+  try { const l = localStorage.getItem(LANG_KEY); return I18N[l] ? l : null; } catch { return null; }
+}
+let chosenLang = savedLang();
+const lang = () => chosenLang || detectLang();
 const t = () => I18N[lang()] || I18N.en;
 
 function esc(s) {
@@ -229,7 +235,27 @@ function renderSettings() {
         ${s.autoStartSupported ? switchBtn(s.autoStart, T.autoStart, 'autostart') : ''}
       </div>
       ${state.settingsError ? `<p class="inline-error" role="alert">${esc(T.errAutostart)}</p>` : ''}
+      <div class="setting stack">
+        <div class="setting-label">
+          <div class="name" id="themeLabel">${esc(T.theme)}</div>
+          <div class="desc">${esc(T.themeDesc)}</div>
+        </div>
+        <div class="theme-grid" role="radiogroup" aria-labelledby="themeLabel">${themeCards()}</div>
+      </div>
     </div>`;
+}
+
+const THEME_SAMPLE = { light: 'b_jobs', dark: 'b_jobs', green: 'B_JOBS', g6: '[b_jobs]' };
+
+function themeCards() {
+  const T = t();
+  const current = document.documentElement.dataset.theme || '';
+  const part = (k) => `<span class="tp-part tp-${k}"><span class="tp-bar">${THEME_SAMPLE[k]}</span><span class="tp-body"><span class="tp-ln"><span class="tp-cd"></span><span class="tp-cd"></span></span><span class="tp-pn"><span class="tp-t1"></span><span class="tp-t2"></span><span class="tp-bt"></span></span></span></span>`;
+  return [['', ['light', 'dark']], ...window.bjobsTheme.THEMES.map((k) => [k, [k]])].map(([id, parts]) =>
+    `<button class="theme-card" role="radio" aria-checked="${current === id}" data-action="theme" data-id="${id}">
+      <span class="tp" aria-hidden="true">${parts.map(part).join('')}</span>
+      <span class="tname">${esc(T.themeNames[id || 'auto'])}</span>
+    </button>`).join('');
 }
 
 let lastHtml = '';
@@ -361,7 +387,12 @@ const actions = {
     if (id) await api('DELETE', `/api/jobs/${id}`);
     if (state.curId === id) state.view = 'list';
   },
-  lang: (code) => api('PUT', '/api/settings', { lang: code }).then((d) => { state.settings = d.settings; }),
+  lang: (code) => {
+    if (!I18N[code]) return;
+    chosenLang = code;
+    try { localStorage.setItem(LANG_KEY, code); } catch { /* still applies for this page */ }
+  },
+  theme: (id = '') => window.bjobsTheme.apply(id),
   autostart: async () => {
     try {
       const d = await api('PUT', '/api/settings', { autoStart: !state.settings.autoStart });

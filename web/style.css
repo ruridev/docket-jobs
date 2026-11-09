@@ -1,30 +1,40 @@
+/*
+ * Themes: the same palettes as docket (workspace/docket/index.html). Without data-theme the
+ * page follows the OS light/dark setting. Shapes (fonts, corners, buttons) per theme are at
+ * the end of this file.
+ */
+@font-face { font-family: "Fusion Pixel KO"; src: url("fonts/pixel.ttf") format("truetype"); font-display: swap; unicode-range: U+0020-024F, U+2000-2BFF, U+3130-318F, U+AC00-D7A3; }
+:root, :root[data-theme="light"] { --bg: #f6f8fa; --panel: #ffffff; --lane: #eef1f4; --border: #d0d7de; --text: #1f2328; --muted: #656d76; --accent: #0969da; --accent-text: #ffffff; --ok: #1a7f37; --warn: #9a6700; --danger: #cf222e; --orange: #bc4c00; --merged: #8250df; --chip: #eaeef2; color-scheme: light; }
+:root[data-theme="dark"] { --bg: #0d1117; --panel: #161b22; --lane: #10151c; --border: #30363d; --text: #e6edf3; --muted: #8d96a0; --accent: #2f81f7; --accent-text: #ffffff; --ok: #3fb950; --warn: #d29922; --danger: #f85149; --orange: #db6d28; --merged: #a371f7; --chip: #21262d; color-scheme: dark; }
+:root[data-theme="green"] { --bg: #0b1410; --panel: #111d17; --lane: #0e1913; --border: #24412f; --text: #d6f2e0; --muted: #8fb39d; --accent: #2bff88; --accent-text: #04140a; --ok: #5be39a; --warn: #e6c35c; --danger: #ff7f7f; --orange: #ffa45c; --merged: #c39cff; --chip: #18291f; color-scheme: dark; }
+:root[data-theme="g6"] { --bg: #e2e2e0; --panel: #f1f1ef; --lane: #e9e9e7; --border: #8a8a88; --text: #1b1b1b; --muted: #4f4f4f; --accent: #1b1b1b; --accent-text: #ffffff; --ok: #1d7a2c; --warn: #8a5f00; --danger: #d6262a; --orange: #b04800; --merged: #6a3db3; --chip: #d9d9d7; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) { --bg: #0d1117; --panel: #161b22; --lane: #10151c; --border: #30363d; --text: #e6edf3; --muted: #8d96a0; --accent: #2f81f7; --accent-text: #ffffff; --ok: #3fb950; --warn: #d29922; --danger: #f85149; --orange: #db6d28; --merged: #a371f7; --chip: #21262d; color-scheme: dark; } }
+
+/* b_jobs names, mapped onto the theme palette. */
 :root {
-  --bg: #F4F5F7;
-  --surface: #FFFFFF;
-  --surface-2: #FAFBFC;
-  --ink: #16181D;
-  --ink-2: #4A5160;
-  --ink-3: #5B6170;
-  --line: #E2E5EA;
-  --line-2: #EEF0F3;
-  --control: #C5CAD3;
-  --accent: #2F5BEA;
-  --accent-soft: #EEF2FE;
-  --off: #9AA1AD;
-  --running: #146C43;
-  --done: #2B4C9B;
-  --failed: #B42318;
-  --waiting: #8A4B00;
-  --stopped: #5B6170;
-  --offline: #B54708;
-  --log-bg: #14161B;
-  --log-ink: #D8DCE3;
-  --log-dim: #8A93A3;
-  --log-sys: #A3AAB6;
-  --log-err: #FF8A80;
-  --font: "Segoe UI", "Malgun Gothic", "Yu Gothic UI", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Hiragino Sans", "Noto Sans CJK KR", sans-serif;
+  --surface: var(--panel);
+  --surface-2: var(--lane);
+  --ink: var(--text);
+  --ink-2: var(--muted);
+  --ink-3: var(--muted);
+  --line: var(--border);
+  --line-2: var(--chip);
+  --control: var(--border);
+  --accent-soft: var(--chip);
+  --off: var(--muted);
+  --running: var(--ok);
+  --done: var(--accent);
+  --failed: var(--danger);
+  --waiting: var(--warn);
+  --stopped: var(--muted);
+  --offline: var(--orange);
+  --log-bg: #0d1117;
+  --log-ink: #e6edf3;
+  --log-dim: #8d96a0;
+  --log-sys: #a8b1bb;
+  --log-err: #ff8a80;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", "Hiragino Sans", "Yu Gothic UI", "Apple SD Gothic Neo", sans-serif;
   --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, "D2Coding", monospace;
-  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -56,10 +66,10 @@ h2 { margin: 0; font-size: 16px; font-weight: 700; }
 /* Buttons */
 .btn { min-height: 44px; min-width: 72px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--control); background: var(--surface); font-size: 14px; font-weight: 600; white-space: nowrap; }
 .btn:hover { background: var(--surface-2); }
-.btn.primary { border: 0; background: var(--accent); color: #FFFFFF; padding: 0 18px; display: inline-flex; align-items: center; gap: 8px; }
-.btn.primary:hover { background: #2549C8; }
-.btn.danger { border: 0; background: var(--failed); color: #FFFFFF; }
-.btn.danger:hover { background: #8F1C13; }
+.btn.primary { border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text); padding: 0 18px; display: inline-flex; align-items: center; gap: 8px; }
+.btn.primary:hover { background: var(--accent); filter: brightness(1.1); }
+.btn.danger { border: 1px solid var(--failed); background: var(--failed); color: #FFFFFF; }
+.btn.danger:hover { background: var(--failed); filter: brightness(1.1); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 .link-btn { align-self: flex-start; min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: var(--accent); font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
 .link-btn.danger { color: var(--failed); }
@@ -69,7 +79,7 @@ h2 { margin: 0; font-size: 16px; font-weight: 700; }
 /* Switch */
 .switch { width: 48px; height: 44px; padding: 0; border: 0; background: transparent; display: flex; align-items: center; flex: none; }
 .switch .track { width: 44px; height: 24px; border-radius: 999px; background: var(--off); display: flex; align-items: center; transition: background .15s; }
-.switch .knob { width: 20px; height: 20px; margin-left: 2px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: margin .15s; }
+.switch .knob { width: 20px; height: 20px; margin-left: 2px; border-radius: 50%; background: var(--panel); box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: margin .15s; }
 .switch[aria-pressed="true"] .track { background: var(--accent); }
 .switch[aria-pressed="true"] .knob { margin-left: 22px; }
 
@@ -127,7 +137,7 @@ dl { margin: 0; }
 .inline-error { margin: 0; padding: 0 16px 14px; font-size: 13px; color: var(--failed); font-weight: 600; }
 
 /* Dialogs */
-.dialog { width: calc(100% - 32px); max-width: 480px; padding: 0; border: 0; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.2); color: var(--ink); }
+.dialog { width: calc(100% - 32px); max-width: 480px; padding: 0; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.2); background: var(--surface); color: var(--ink); }
 .dialog.small { max-width: 400px; }
 .dialog::backdrop { background: rgba(22,24,29,.45); }
 .dialog-title { padding: 18px 20px 0; font-size: 18px; }
@@ -145,3 +155,69 @@ dl { margin: 0; }
 .check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 15px; }
 .check input { width: 18px; height: 18px; }
 .form-error { margin: 0; font-size: 14px; color: var(--failed); font-weight: 600; }
+
+.logo rect { fill: var(--text); }
+.logo path { stroke: var(--panel); }
+
+/* Theme picker: each sample shows the theme's own colors (same values as the palettes above). */
+.setting.stack { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+.setting.stack > * { flex: none; }
+.theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+.theme-card { display: flex; flex-direction: column; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); text-align: left; font-size: 13px; }
+.theme-card[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.theme-card .tname { padding: 0 2px 2px; font-weight: 600; }
+.tp { display: flex; height: 72px; border-radius: 5px; overflow: hidden; box-shadow: inset 0 0 0 1px rgb(127 127 127 / .35); }
+.tp-part { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--p-bg); }
+.tp-bar { padding: 2px 6px; font-size: 12px; line-height: 16px; white-space: nowrap; overflow: hidden; background: var(--p-bar); color: var(--p-bartext); font-family: var(--p-font, inherit); }
+.tp-body { flex: 1; display: flex; gap: 5px; padding: 6px; }
+.tp-ln { width: 34%; border-radius: 3px; padding: 4px; display: flex; flex-direction: column; gap: 3px; background: var(--p-lane); }
+.tp-cd { height: 10px; border-radius: 2px; background: var(--p-panel); box-shadow: inset 0 0 0 1px var(--p-border); }
+.tp-pn { flex: 1; border-radius: 3px; padding: 5px; display: flex; flex-direction: column; gap: 4px; background: var(--p-panel); box-shadow: inset 0 0 0 1px var(--p-border); }
+.tp-t1 { height: 5px; width: 70%; border-radius: 2px; background: var(--p-text); }
+.tp-t2 { height: 4px; width: 50%; border-radius: 2px; background: var(--p-muted); }
+.tp-bt { margin-top: auto; height: 8px; width: 44%; border-radius: 2px; background: var(--p-accent); }
+.tp-light { --p-bg: #f6f8fa; --p-panel: #ffffff; --p-lane: #eef1f4; --p-border: #d0d7de; --p-text: #1f2328; --p-muted: #656d76; --p-accent: #0969da; --p-bar: #ffffff; --p-bartext: #1f2328; }
+.tp-dark { --p-bg: #0d1117; --p-panel: #161b22; --p-lane: #10151c; --p-border: #30363d; --p-text: #e6edf3; --p-muted: #8d96a0; --p-accent: #2f81f7; --p-bar: #161b22; --p-bartext: #e6edf3; }
+.tp-green { --p-bg: #0b1410; --p-panel: #111d17; --p-lane: #0e1913; --p-border: #24412f; --p-text: #d6f2e0; --p-muted: #8fb39d; --p-accent: #2bff88; --p-bar: #0b1410; --p-bartext: #2bff88; --p-font: "Barlow Condensed", sans-serif; }
+.tp-g6 { --p-bg: #e2e2e0; --p-panel: #f1f1ef; --p-lane: #e9e9e7; --p-border: #8a8a88; --p-text: #1b1b1b; --p-muted: #4f4f4f; --p-accent: #1b1b1b; --p-bar: #1b1b1b; --p-bartext: #f1f1ef; --p-font: "Fusion Pixel KO", monospace; }
+.tp-g6 * { border-radius: 0; }
+
+/* ---------- Theme shapes (as in docket) ---------- */
+
+/* Green: condensed uppercase headings, monospace controls, square-ish corners. */
+:root[data-theme="green"] body { font-family: "IBM Plex Sans KR", var(--font); }
+:root[data-theme="green"] body :is(h1, h2, .brand, .dialog-title, .setting-label .name) { font-family: "Barlow Condensed", "IBM Plex Sans KR", sans-serif; text-transform: uppercase; letter-spacing: .04em; font-weight: 500; }
+:root[data-theme="green"] body .brand { font-weight: 300; letter-spacing: 0; color: var(--accent); }
+:root[data-theme="green"] body :is(.btn, .link-btn, .segmented button, .menu button, .agent-status, .mono, .log, .theme-card .tname) { font-family: "Space Mono", "IBM Plex Sans KR", monospace; }
+:root[data-theme="green"] body :is(.btn, .link-btn, .segmented button, .menu button) { text-transform: uppercase; letter-spacing: .06em; }
+:root[data-theme="green"] body .btn { border-radius: 3px; background: rgba(43,255,136,.05); border-color: var(--border); color: var(--text); }
+:root[data-theme="green"] body .btn:hover { background: rgba(43,255,136,.14); }
+:root[data-theme="green"] body .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+:root[data-theme="green"] body .btn.danger { background: var(--danger); border-color: var(--danger); color: var(--accent-text); }
+:root[data-theme="green"] body :is(.card, .menu, .segmented, .segmented button, .theme-card, .log) { border-radius: 3px; }
+:root[data-theme="green"] body .dialog { border: 1px solid var(--accent); border-radius: 4px; }
+:root[data-theme="green"] body .field :is(input, select) { background: var(--bg); border-color: var(--border); border-radius: 3px; }
+:root[data-theme="green"] body .log { background: var(--bg); border: 1px solid var(--border); }
+:root[data-theme="green"] body .topbar { background: var(--bg); }
+
+/* g6: pixel font, no rounding or shadows, [bracketed] text buttons, inverted bars. */
+:root[data-theme="g6"] body { font-family: "Fusion Pixel KO", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, ui-monospace, sans-serif; -webkit-font-smoothing: none; }
+:root[data-theme="g6"] body * { border-radius: 0 !important; box-shadow: none !important; font-weight: 400 !important; }
+:root[data-theme="g6"] body :is(button, input, select, .mono, .log) { font-family: inherit; }
+:root[data-theme="g6"] body .topbar { border-bottom: 2px solid var(--text); }
+:root[data-theme="g6"] body :is(.btn, .link-btn) { min-width: 0; border: 0; background: none; padding: 0 4px; color: var(--text); }
+:root[data-theme="g6"] body :is(.btn, .link-btn)::before { content: "["; margin-right: 4px; }
+:root[data-theme="g6"] body :is(.btn, .link-btn)::after { content: "]"; margin-left: 4px; }
+:root[data-theme="g6"] body .link-btn.danger { color: var(--danger); }
+:root[data-theme="g6"] body :is(.btn, .link-btn, .icon-btn, .menu button):hover { background: var(--chip); }
+:root[data-theme="g6"] body :is(.btn.primary, .btn.danger) { padding: 0 12px; }
+:root[data-theme="g6"] body .btn.primary { background: var(--text); color: var(--panel); }
+:root[data-theme="g6"] body .btn.danger { background: var(--danger); color: var(--panel); }
+:root[data-theme="g6"] body :is(.btn.primary, .btn.danger)::before, :root[data-theme="g6"] body :is(.btn.primary, .btn.danger)::after { content: none; }
+:root[data-theme="g6"] body .field :is(input, select) { background: #fff; border: 1px solid #555; }
+:root[data-theme="g6"] body :is(.card, .menu) { border: 1px solid #555; }
+:root[data-theme="g6"] body .dialog { border: 2px solid var(--text); }
+:root[data-theme="g6"] body .dialog-title { background: var(--text); color: var(--panel); padding: 8px 20px; }
+:root[data-theme="g6"] body .segmented button[aria-pressed="true"], :root[data-theme="g6"] body .theme-card[aria-checked="true"] { background: var(--text); color: var(--panel); }
+:root[data-theme="g6"] body .theme-card[aria-checked="true"] { outline: 2px solid var(--text); outline-offset: -2px; }
+:root[data-theme="g6"] body .switch .track { border: 1px solid var(--text); }

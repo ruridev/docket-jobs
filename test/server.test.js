@@ -69,9 +69,13 @@ test('creates, edits and deletes a job', async () => {
   assert.equal(store.jobs.length, 0);
 });
 
-test('saves the display language', async () => {
-  const res = await fetch(`${base}/api/settings`, { method: 'PUT', headers: json, body: JSON.stringify({ lang: 'ja' }) });
-  assert.equal((await res.json()).settings.lang, 'ja');
-  const bad = await fetch(`${base}/api/settings`, { method: 'PUT', headers: json, body: JSON.stringify({ lang: 'xx' }) });
-  assert.equal(bad.status, 400);
+test('server settings hold only autostart; language and theme live in the browser', async () => {
+  const res = await fetch(`${base}/api/settings`, { method: 'PUT', headers: json, body: JSON.stringify({ lang: 'ja', theme: 'g6' }) });
+  assert.deepEqual((await res.json()).settings, { autoStart: false, autoStartSupported: false });
+  assert.equal(fs.existsSync(path.join(dir, 'settings.json')), false);
+});
+
+test('serves the theme script and pixel font', async () => {
+  assert.equal((await fetch(`${base}/theme.js`)).status, 200);
+  assert.equal((await fetch(`${base}/fonts/pixel.ttf`)).headers.get('content-type'), 'font/ttf');
 });

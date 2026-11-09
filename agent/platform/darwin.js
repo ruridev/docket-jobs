@@ -109,7 +109,7 @@ async function scanLaunchAgents() {
     try { p = JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', full])).stdout); } catch { continue; }
     if (p.Disabled || off.has(p.Label) || !(p.RunAtLoad || p.KeepAlive)) continue;
     const argv = Array.isArray(p.ProgramArguments) && p.ProgramArguments.length ? p.ProgramArguments : p.Program ? [p.Program] : null;
-    if (!argv) continue;
+    if (!argv || argv.includes(AGENT_ENTRY)) continue; // b_jobs itself
     items.push({
       key: `agent:${file}`, name: p.Label || path.parse(file).name, source: 'agent',
       command: argv.map(shq).join(' '), cwd: p.WorkingDirectory || '', data: { file: full },
