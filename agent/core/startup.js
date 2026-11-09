@@ -38,7 +38,7 @@ export class StartupImporter {
     if (!item) return { error: 'not_found' };
 
     const backup = await this.platform.disableStartupItem(item, this.backupDir);
-    const res = this.store.addJob({ name: item.name, command: item.command, cwd: item.cwd || '', hidden: true });
+    const res = this.store.addJob({ name: item.name, command: item.command, cwd: item.cwd || '', delay: item.delay || 0, hidden: true });
     if (res.error) {
       await this.platform.restoreStartupItem(backup);
       return res;

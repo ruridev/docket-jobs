@@ -8,7 +8,8 @@ import { LogStore } from '../agent/core/logs.js';
 import { Runner } from '../agent/core/runner.js';
 import { StartupImporter } from '../agent/core/startup.js';
 import { platform } from '../agent/platform/index.js';
-import { parseRegQuery } from '../agent/platform/win32.js';
+import { parseRegQuery, taskToItem, isoDurationSeconds } from '../agent/platform/win32.js';
+import { AGENT_ENTRY } from '../agent/paths.js';
 
 /** Stands in for the OS: a list of entries that can be switched off and back on. */
 function fakePlatform() {
@@ -80,6 +81,32 @@ test('importing something unknown or twice is refused', async () => {
   assert.equal((await importer.import('run:Steam')).error, 'already_imported');
   assert.equal((await importer.undo('run:Nope')).error, 'not_found');
   runner.shutdown();
+});
+
+test('a logon task becomes a job with its command, folder and delay', () => {
+  const item = taskToItem({
+    path: '\\', name: 'Local_AI_llama_cpp', delay: 'PT1M30S',
+    actions: [{ exe: 'C:\\Program Files\\PowerShell\\pwsh.exe', args: '-File "C:\\AI\\start.ps1"', cwd: 'C:\\AI' }],
+  });
+  assert.equal(item.key, 'task:\\Local_AI_llama_cpp');
+  assert.equal(item.command, '"C:\\Program Files\\PowerShell\\pwsh.exe" -File "C:\\AI\\start.ps1"');
+  assert.equal(item.cwd, 'C:\\AI');
+  assert.equal(item.delay, 90);
+  assert.deepEqual(item.data, { path: '\\', name: 'Local_AI_llama_cpp' });
+});
+
+test('tasks b_jobs cannot run, or b_jobs itself, are left out', () => {
+  assert.equal(taskToItem({ path: '\\', name: 'com', actions: [{ exe: '' }] }), null);
+  assert.equal(taskToItem({ path: '\\', name: 'none', actions: [] }), null);
+  assert.equal(taskToItem({ path: '\\', name: 'self', actions: [{ exe: 'node.exe', args: `"${AGENT_ENTRY}"` }] }), null);
+});
+
+test('isoDurationSeconds reads Task Scheduler delays', () => {
+  assert.equal(isoDurationSeconds('PT30S'), 30);
+  assert.equal(isoDurationSeconds('PT1H2M3S'), 3723);
+  assert.equal(isoDurationSeconds('P1DT1S'), 86401);
+  assert.equal(isoDurationSeconds(''), 0);
+  assert.equal(isoDurationSeconds('junk'), 0);
 });
 
 test('parseRegQuery reads names with spaces and empty values', () => {

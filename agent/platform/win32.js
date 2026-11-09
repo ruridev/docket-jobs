@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn, spawnSync, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
+const runAsync = promisify(execFile);
 import { AGENT_ENTRY } from '../paths.js';
 
 const LAUNCHER = fileURLToPath(new URL('./win-launcher.js', import.meta.url));
@@ -112,11 +115,84 @@ function disabledByTaskManager(sub) {
   return off;
 }
 
+/* Task Scheduler: only tasks the user registered (run as this user, start at logon). */
+
+function powershell(script, env = {}) {
+  return runAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
+    `[Console]::OutputEncoding=[Text.Encoding]::UTF8; $ErrorActionPreference='Stop'; ${script}`],
+  { windowsHide: true, timeout: 30000, env: { ...process.env, ...env }, maxBuffer: 8 * 1024 * 1024 });
+}
+
+const LIST_TASKS = `
+$me = [Security.Principal.WindowsIdentity]::GetCurrent()
+$ids = @($me.Name, $env:USERNAME, $me.User.Value)
+$out = @(Get-ScheduledTask | Where-Object {
+  $_.TaskPath -notlike '\\Microsoft\\*' -and $_.State -ne 'Disabled' -and
+  ($ids -contains $_.Principal.UserId) -and
+  @($_.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' -and $_.Enabled }).Count -gt 0
+} | ForEach-Object {
+  [pscustomobject]@{
+    path = $_.TaskPath; name = $_.TaskName
+    actions = @($_.Actions | ForEach-Object { [pscustomobject]@{ exe = $_.Execute; args = $_.Arguments; cwd = $_.WorkingDirectory } })
+    delay = @($_.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' } | ForEach-Object { $_.Delay }) -join ''
+  }
+})
+ConvertTo-Json -InputObject $out -Depth 4 -Compress`;
+
+/** "PT1M30S" -> 90 */
+export function isoDurationSeconds(d) {
+  const m = String(d || '').match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
+  if (!m) return 0;
+  const [, days, h, min, s] = m.map((x) => Number(x) || 0);
+  return days * 86400 + h * 3600 + min * 60 + s;
+}
+
+function expandEnv(s) {
+  return String(s || '').replace(/%([^%]+)%/g, (all, name) => process.env[name] ?? all);
+}
+
+/** Turns a task from LIST_TASKS into a startup item, or null if b_jobs can't run it (e.g. a COM action). */
+export function taskToItem(task) {
+  const actions = (task.actions || []).filter((a) => a && a.exe);
+  if (!actions.length || actions.length !== (task.actions || []).length) return null;
+  const cmd = actions.map((a) => {
+    const exe = /^".*"$/.test(a.exe) || !/\s/.test(a.exe) ? a.exe : `"${a.exe}"`;
+    return a.args ? `${exe} ${a.args}` : exe;
+  }).join(' && ');
+  if (cmd.includes(AGENT_ENTRY)) return null;
+  return {
+    key: `task:${task.path}${task.name}`, name: task.name, source: 'task', command: cmd,
+    cwd: expandEnv(actions[0].cwd), delay: isoDurationSeconds(task.delay),
+    data: { path: task.path, name: task.name },
+  };
+}
+
+async function scanTasks() {
+  const { stdout } = await powershell(LIST_TASKS);
+  const list = JSON.parse(stdout.trim() || '[]');
+  return (Array.isArray(list) ? list : [list]).map(taskToItem).filter(Boolean);
+}
+
+async function setTaskEnabled(path_, name, enabled) {
+  // Names go through env vars so nothing in them is read as PowerShell code.
+  const verb = enabled ? 'Enable-ScheduledTask' : 'Disable-ScheduledTask';
+  await powershell(`${verb} -TaskPath $env:BJ_TASK_PATH -TaskName $env:BJ_TASK_NAME | Out-Null`,
+    { BJ_TASK_PATH: path_, BJ_TASK_NAME: name });
+}
+
 /**
- * Startup items b_jobs can take over without admin rights: the user's Run key and
- * Startup folder. Items already disabled in Task Manager are left out.
+ * Startup items b_jobs can take over without admin rights: the user's Run key, Startup
+ * folder and their own logon tasks in Task Scheduler. Items already disabled in Task
+ * Manager are left out.
  */
-export function scanStartup() {
+export async function scanStartup() {
+  const notes = [];
+  let tasks = [];
+  try { tasks = await scanTasks(); } catch { notes.push('tasksUnreadable'); }
+  return { items: [...scanRunAndFolder(), ...tasks], notes };
+}
+
+function scanRunAndFolder() {
   const items = [];
   const runOff = disabledByTaskManager('Run');
   for (const v of regValues(RUN_KEY)) {
@@ -137,11 +213,16 @@ export function scanStartup() {
       command: `start "" "${full}"`, data: { file: full },
     });
   }
-  return { items, notes: [] };
+  return items;
 }
 
 /** Turns the original entry off and returns what is needed to put it back. */
-export function disableStartupItem(item, backupDir) {
+export async function disableStartupItem(item, backupDir) {
+  if (item.source === 'task') {
+    // The task is only disabled, never deleted, so its other settings stay as they were.
+    await setTaskEnabled(item.data.path, item.data.name, false);
+    return { kind: 'task', path: item.data.path, name: item.data.name };
+  }
   if (item.source === 'run') {
     const { name, type, value } = item.data;
     const res = reg(['delete', RUN_KEY, '/v', name, '/f']);
@@ -158,7 +239,11 @@ export function disableStartupItem(item, backupDir) {
   throw new Error(`unknown source ${item.source}`);
 }
 
-export function restoreStartupItem(backup) {
+export async function restoreStartupItem(backup) {
+  if (backup.kind === 'task') {
+    await setTaskEnabled(backup.path, backup.name, true);
+    return;
+  }
   if (backup.kind === 'run') {
     const res = reg(['add', RUN_KEY, '/v', backup.name, '/t', backup.type, '/d', backup.value, '/f']);
     if (res.status !== 0) throw new Error((res.stderr || 'reg add failed').trim());
