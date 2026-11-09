@@ -43,7 +43,7 @@ function readBody(req, limit = 64 * 1024) {
  *  - changes need the X-BJobs header, which a cross-site page cannot send without a CORS
  *    preflight that this server never approves, and a matching Origin when one is sent
  */
-export function createServer({ store, runner, logs, platform, autostartSupported, port, webDir }) {
+export function createServer({ store, runner, logs, platform, autostartSupported, port, webDir, importer = null }) {
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
 
@@ -94,6 +94,21 @@ export function createServer({ store, runner, logs, platform, autostartSupported
       if (parts.length === 3 && parts[2] === 'logs' && method === 'GET') {
         const limit = Math.min(Number(url.searchParams.get('limit')) || 200, 500);
         return send(res, 200, { entries: logs.tail(id, limit) });
+      }
+    }
+
+    if (parts[0] === 'startup' && importer) {
+      try {
+        if (parts.length === 1 && method === 'GET') return send(res, 200, await importer.list());
+        if (parts.length === 2 && method === 'POST' && (parts[1] === 'import' || parts[1] === 'undo')) {
+          const { key } = await readBody(req);
+          if (typeof key !== 'string') return send(res, 400, { error: 'invalid' });
+          const r = parts[1] === 'import' ? await importer.import(key) : await importer.undo(key);
+          return send(res, r.error ? (r.error === 'not_found' ? 404 : 409) : 200, r);
+        }
+      } catch (err) {
+        if (err.status) throw err;
+        return send(res, 500, { error: 'startup_failed', detail: String(err.message) });
       }
     }
 

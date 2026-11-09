@@ -16,6 +16,7 @@
   --failed: #B42318;
   --waiting: #8A4B00;
   --stopped: #5B6170;
+  --offline: #B54708;
   --log-bg: #14161B;
   --log-ink: #D8DCE3;
   --log-dim: #8A93A3;
@@ -41,10 +42,10 @@ button { cursor: pointer; }
 .topbar { background: var(--surface); border-bottom: 1px solid var(--line); }
 .topbar-inner { display: flex; align-items: center; gap: 12px; padding-top: 8px; padding-bottom: 8px; padding-right: 12px; }
 .brand { flex: 1; font-size: 18px; font-weight: 700; color: var(--ink); text-decoration: none; }
-.agent-status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--running); }
-.agent-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-.agent-status.offline { color: var(--failed); }
-
+/* Green "Active" normally; orange with a message when the agent can't be reached. */
+.agent-status { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; font-size: 13px; font-weight: 600; color: var(--running); }
+.agent-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.agent-status.offline { color: var(--offline); }
 .main { padding-top: 28px; padding-bottom: 48px; display: flex; flex-direction: column; gap: 16px; }
 .page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .page-head > div { flex: 1 1 280px; }
@@ -93,6 +94,9 @@ h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .menu button:hover { background: var(--line-2); }
 .menu .danger { color: var(--failed); }
 
+.grow { flex: 1; min-width: 0; }
+.done-label { font-size: 14px; font-weight: 600; color: var(--running); }
+.note { margin: 0; font-size: 13px; color: var(--ink-3); }
 .empty { padding: 48px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--ink-3); text-align: center; }
 
 /* Detail */

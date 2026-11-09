@@ -6,6 +6,7 @@ const unsupported = {
   isAutostartEnabled: () => false,
   enableAutostart: () => { throw new Error(`Autostart is not supported on ${process.platform} yet`); },
   disableAutostart: () => {},
+  scanStartup: async () => ({ items: [], notes: ['unsupported'] }),
 };
 
 export const platform = process.platform === 'win32' ? win32

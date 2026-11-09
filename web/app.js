@@ -12,7 +12,38 @@ const state = {
   editId: null,
   delId: null,
   settingsError: false,
+  startup: { loading: false, items: [], imported: [], notes: [], error: false, busy: null },
 };
+
+// Reading startup items on macOS may wait for a permission prompt.
+const STARTUP_TIMEOUT_MS = 45000;
+
+async function loadStartup() {
+  state.startup.loading = true;
+  render();
+  try {
+    const d = await api('GET', '/api/startup', undefined, STARTUP_TIMEOUT_MS);
+    Object.assign(state.startup, { items: d.items, imported: d.imported, notes: d.notes, error: false });
+  } catch {
+    state.startup.error = true;
+  }
+  state.startup.loading = false;
+}
+
+async function startupAction(kind, key) {
+  state.startup.busy = key;
+  state.startup.error = false;
+  render();
+  try {
+    await api('POST', `/api/startup/${kind}`, { key }, STARTUP_TIMEOUT_MS);
+  } catch {
+    state.startup.error = true;
+  }
+  state.startup.busy = null;
+  const hadError = state.startup.error;
+  await loadStartup();
+  state.startup.error = hadError || state.startup.error;
+}
 
 const $ = (sel) => document.querySelector(sel);
 const lang = () => state.settings.lang || detectLang();
@@ -22,18 +53,23 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-async function api(method, url, body) {
+async function api(method, url, body, timeoutMs = 5000) {
   const res = await fetch(url, {
     method,
     headers: body === undefined ? { 'X-BJobs': '1' } : { 'Content-Type': 'application/json', 'X-BJobs': '1' },
     body: body === undefined ? undefined : JSON.stringify(body),
+    // Without a timeout a hung connection would leave the page showing "Active" forever.
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error || String(res.status)), { data });
   return data;
 }
 
+let refreshing = false;
 async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
   try {
     const d = await api('GET', '/api/state');
     state.jobs = d.jobs;
@@ -45,6 +81,8 @@ async function refresh() {
     }
   } catch {
     state.online = false;
+  } finally {
+    refreshing = false;
   }
   render();
 }
@@ -94,7 +132,36 @@ function renderList() {
     </div>
     <div class="card">
       ${rows || `<div class="empty"><div>${esc(T.empty)}</div><button class="btn" data-action="add">${esc(T.emptyAdd)}</button></div>`}
-    </div>`;
+    </div>
+    <button class="link-btn" data-action="import">${esc(T.importLink)}</button>`;
+}
+
+function renderImport() {
+  const T = t();
+  const s = state.startup;
+  const busy = (key) => (s.busy === key ? ' disabled' : '');
+  const rows = [
+    ...s.items.map((i) => `<div class="row">
+      <div class="row-name grow">${esc(i.name)}</div>
+      <button class="btn" data-action="importItem" data-id="${esc(i.key)}"${busy(i.key)}>${esc(T.importBtn)}</button>
+    </div>`),
+    ...s.imported.map((i) => `<div class="row">
+      <div class="row-name grow">${esc(i.name)}</div>
+      <span class="done-label">${esc(T.imported)}</span>
+      <button class="link-btn" data-action="undoItem" data-id="${esc(i.key)}"${busy(i.key)}>${esc(T.undo)}</button>
+    </div>`),
+  ].join('');
+  const body = s.loading && !rows
+    ? `<div class="empty">${esc(T.loading)}</div>`
+    : rows || `<div class="empty">${esc(T.importEmpty)}</div>`;
+  const notes = s.notes.map((n) => T.notes[n]).filter(Boolean)
+    .map((n) => `<p class="note">${esc(n)}</p>`).join('');
+  return `
+    <button class="link-btn" data-action="back">${ICON_BACK}${esc(T.back)}</button>
+    <div><h1>${esc(T.importTitle)}</h1><p class="sub">${esc(T.importDesc)}</p></div>
+    ${s.error ? `<p class="form-error" role="alert">${esc(T.importError)}</p>` : ''}
+    <div class="card" aria-busy="${s.loading}">${body}</div>
+    ${notes}`;
 }
 
 function timeLabel(iso) {
@@ -170,11 +237,16 @@ function render() {
   const T = t();
   document.documentElement.lang = lang();
   const status = $('#agentStatus');
-  status.textContent = state.online ? T.agentRunning : T.agentOffline;
+  const statusText = state.online ? T.agentRunning : T.agentOffline;
+  status.querySelector('.label').textContent = statusText;
+  status.title = statusText;
   status.classList.toggle('offline', !state.online);
   document.querySelector('[data-action="settings"]').setAttribute('aria-label', T.settings);
 
-  const html = state.view === 'detail' ? renderDetail() : state.view === 'settings' ? renderSettings() : renderList();
+  const html = state.view === 'detail' ? renderDetail()
+    : state.view === 'settings' ? renderSettings()
+    : state.view === 'import' ? renderImport()
+    : renderList();
   if (html !== lastHtml) {
     const view = $('#view');
     const log = $('#log');
@@ -265,6 +337,13 @@ const actions = {
   open: (id) => { state.view = 'detail'; state.curId = id; state.logs = []; },
   back: () => { state.view = 'list'; },
   settings: () => { state.view = 'settings'; state.settingsError = false; },
+  import: () => {
+    state.view = 'import';
+    state.startup.error = false;
+    loadStartup().then(render);
+  },
+  importItem: (key) => startupAction('import', key),
+  undoItem: (key) => startupAction('undo', key),
   menu: (id) => { state.menuId = state.menuId === id ? null : id; },
   edit: (id) => openJobDialog(state.jobs.find((j) => j.id === id)),
   delete: (id) => openDeleteDialog(id),
@@ -310,7 +389,7 @@ document.addEventListener('click', async (e) => {
     /* the next refresh shows the real state */
   }
   render();
-  if (!['add', 'edit', 'delete', 'toggleAdv', 'closeDialog', 'menu', 'home', 'back', 'settings', 'open'].includes(name)) await refresh();
+  if (!['add', 'edit', 'delete', 'toggleAdv', 'closeDialog', 'menu', 'home', 'back', 'settings', 'open', 'import'].includes(name)) await refresh();
   else if (name === 'open') await refresh();
 });
 

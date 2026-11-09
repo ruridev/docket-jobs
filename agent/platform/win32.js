@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -21,7 +22,7 @@ export function spawnJob(command, { cwd, hidden, stdio }) {
 }
 
 // HKCU Run works without admin rights, unlike a logon task in Task Scheduler.
-const RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+const RUN_KEY = process.env.BJOBS_RUN_KEY || 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
 const VALUE_NAME = process.env.BJOBS_AUTOSTART_NAME || 'b_jobs';
 
 function reg(args) {
@@ -77,4 +78,96 @@ export function outputDecoder() {
   return (buf) => {
     try { return utf8.decode(buf); } catch { return (fallback || lenient).decode(buf); }
   };
+}
+
+/* ---------- other programs' startup items ---------- */
+
+const APPROVED_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved';
+const STARTUP_DIR = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+let decode = null;
+
+/** Parses `reg query <key>` output into [{ name, type, value }]. */
+export function parseRegQuery(text) {
+  const out = [];
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^ {4}(.+?) {4}(REG_[A-Z_]+) {4}(.*)$/) || line.match(/^ {4}(.+?) {4}(REG_[A-Z_]+)$/);
+    if (m) out.push({ name: m[1], type: m[2], value: m[3] ?? '' });
+  }
+  return out;
+}
+
+function regValues(key) {
+  const res = spawnSync('reg', ['query', key], { windowsHide: true });
+  if (res.status !== 0) return [];
+  decode ||= outputDecoder();
+  return parseRegQuery(decode(res.stdout));
+}
+
+/** Names that Task Manager's Startup tab has switched off (odd first byte). */
+function disabledByTaskManager(sub) {
+  const off = new Set();
+  for (const v of regValues(`${APPROVED_KEY}\\${sub}`)) {
+    if (v.type === 'REG_BINARY' && (Number.parseInt(v.value.slice(0, 2), 16) & 1) === 1) off.add(v.name);
+  }
+  return off;
+}
+
+/**
+ * Startup items b_jobs can take over without admin rights: the user's Run key and
+ * Startup folder. Items already disabled in Task Manager are left out.
+ */
+export function scanStartup() {
+  const items = [];
+  const runOff = disabledByTaskManager('Run');
+  for (const v of regValues(RUN_KEY)) {
+    if (v.name === VALUE_NAME || runOff.has(v.name)) continue;
+    if (v.type !== 'REG_SZ' && v.type !== 'REG_EXPAND_SZ') continue;
+    items.push({ key: `run:${v.name}`, name: v.name, source: 'run', command: v.value, data: v });
+  }
+  const folderOff = disabledByTaskManager('StartupFolder');
+  let files = [];
+  try { files = fs.readdirSync(STARTUP_DIR); } catch { /* no folder */ }
+  for (const file of files) {
+    if (file.toLowerCase() === 'desktop.ini' || folderOff.has(file)) continue;
+    const full = path.join(STARTUP_DIR, file);
+    if (!fs.statSync(full).isFile()) continue;
+    items.push({
+      key: `folder:${file}`, name: path.parse(file).name, source: 'folder',
+      command: `start "" "${full}"`, data: { file: full },
+    });
+  }
+  return { items, notes: [] };
+}
+
+/** Turns the original entry off and returns what is needed to put it back. */
+export function disableStartupItem(item, backupDir) {
+  if (item.source === 'run') {
+    const { name, type, value } = item.data;
+    const res = reg(['delete', RUN_KEY, '/v', name, '/f']);
+    if (res.status !== 0) throw new Error((res.stderr || 'reg delete failed').trim());
+    return { kind: 'run', name, type, value };
+  }
+  if (item.source === 'folder') {
+    fs.mkdirSync(backupDir, { recursive: true });
+    let dest = path.join(backupDir, path.basename(item.data.file));
+    if (fs.existsSync(dest)) dest = path.join(backupDir, `${Date.now()}-${path.basename(item.data.file)}`);
+    fs.renameSync(item.data.file, dest);
+    return { kind: 'folder', from: item.data.file, to: dest };
+  }
+  throw new Error(`unknown source ${item.source}`);
+}
+
+export function restoreStartupItem(backup) {
+  if (backup.kind === 'run') {
+    const res = reg(['add', RUN_KEY, '/v', backup.name, '/t', backup.type, '/d', backup.value, '/f']);
+    if (res.status !== 0) throw new Error((res.stderr || 'reg add failed').trim());
+    return;
+  }
+  if (backup.kind === 'folder') {
+    if (fs.existsSync(backup.from)) throw new Error('A file with the same name is already there');
+    fs.mkdirSync(path.dirname(backup.from), { recursive: true });
+    fs.renameSync(backup.to, backup.from);
+    return;
+  }
+  throw new Error(`unknown backup ${backup.kind}`);
 }

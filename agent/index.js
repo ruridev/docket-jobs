@@ -4,6 +4,7 @@ import { Store } from './core/store.js';
 import { LogStore } from './core/logs.js';
 import { Runner } from './core/runner.js';
 import { createServer } from './core/server.js';
+import { StartupImporter } from './core/startup.js';
 import { platform, autostartSupported } from './platform/index.js';
 
 const args = process.argv.slice(2);
@@ -14,7 +15,8 @@ const port = portArg ? Number(portArg.split('=')[1]) : Number(process.env.BJOBS_
 const store = new Store(DATA_DIR);
 const logs = new LogStore(LOG_DIR);
 const runner = new Runner({ store, logs, platform });
-const server = createServer({ store, runner, logs, platform, autostartSupported, port, webDir: WEB_DIR });
+const importer = new StartupImporter({ store, runner, logs, platform, dataDir: DATA_DIR });
+const server = createServer({ store, runner, logs, platform, autostartSupported, port, webDir: WEB_DIR, importer });
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
