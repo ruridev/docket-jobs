@@ -7,6 +7,7 @@ import { Store } from '../agent/core/store.js';
 import { LogStore } from '../agent/core/logs.js';
 import { Runner } from '../agent/core/runner.js';
 import { createServer } from '../agent/core/server.js';
+import { createAuth } from '../agent/core/auth.js';
 import { platform } from '../agent/platform/index.js';
 import { WEB_DIR } from '../agent/paths.js';
 
@@ -16,18 +17,31 @@ const logs = new LogStore(path.join(dir, 'logs'));
 const runner = new Runner({ store, logs, platform });
 // autostartSupported: false keeps the test away from the real login items.
 const port = 18765 + Math.floor(Math.random() * 1000);
-const server = createServer({ store, runner, logs, platform, autostartSupported: false, port, webDir: WEB_DIR });
+const signIn = createAuth({ file: path.join(dir, 'auth.json'), cookie: 'docket_jobs_session' });
+const server = createServer({ store, runner, logs, platform, autostartSupported: false, port, webDir: WEB_DIR, auth: signIn });
 await new Promise((r) => server.listen(port, '127.0.0.1', r));
 after(() => { runner.shutdown(); server.close(); });
 
 const base = `http://127.0.0.1:${port}`;
-const auth = { 'X-Docket-Jobs': '1' };
+const setup = await fetch(`${base}/api/auth/setup`, { method: 'POST', headers: { 'X-Docket-Jobs': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'alice', password: 'correct horse' }) });
+const session = setup.headers.get('set-cookie').split(';')[0];
+const auth = { 'X-Docket-Jobs': '1', Cookie: session };
 const json = { 'Content-Type': 'application/json', ...auth };
 
-test('serves the UI', async () => {
-  const res = await fetch(`${base}/`);
+test('serves the UI when signed in, and the sign-in page when not', async () => {
+  const res = await fetch(`${base}/`, { headers: { Cookie: session } });
   assert.equal(res.status, 200);
-  assert.match(await res.text(), /<title>docket-jobs<\/title>/);
+  const html = await res.text();
+  assert.match(html, /<title>docket-jobs<\/title>/);
+  assert.match(html, /app\.js/);
+  assert.match(await (await fetch(`${base}/`)).text(), /login\.js/);
+});
+
+test('signed out, the API answers 401; the account cannot be created twice', async () => {
+  assert.equal((await fetch(`${base}/api/state`, { headers: { 'X-Docket-Jobs': '1' } })).status, 401);
+  assert.equal((await fetch(`${base}/api/state`, { headers: { 'X-Docket-Jobs': '1', Cookie: 'docket_jobs_session=YWxpY2U.9999999999999.forged' } })).status, 401);
+  const again = await fetch(`${base}/api/auth/setup`, { method: 'POST', headers: { 'X-Docket-Jobs': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'mallory', password: 'something long' }) });
+  assert.equal(again.status, 409);
 });
 
 test('lets only the docket portal frame the UI', async () => {
@@ -48,7 +62,7 @@ test('rejects reads without the X-Docket-Jobs header', async () => {
   assert.equal(res.status, 403);
 });
 
-test('accepts API requests with the X-Docket-Jobs header and no token', async () => {
+test('accepts API requests with the X-Docket-Jobs header and the session', async () => {
   assert.equal((await fetch(`${base}/api/state`, { headers: auth })).status, 200);
 });
 
@@ -100,7 +114,7 @@ test('serves the theme script and pixel font', async () => {
 test('the frame-ancestors list can be changed with DOCKET_FRAME_ANCESTORS', async () => {
   process.env.DOCKET_FRAME_ANCESTORS = 'http://localhost:9999';
   const p = port + 1000;
-  const srv = createServer({ store, runner, logs, platform, autostartSupported: false, port: p, webDir: WEB_DIR });
+  const srv = createServer({ store, runner, logs, platform, autostartSupported: false, port: p, webDir: WEB_DIR, auth: signIn });
   delete process.env.DOCKET_FRAME_ANCESTORS;
   await new Promise((r) => srv.listen(p, '127.0.0.1', r));
   try {

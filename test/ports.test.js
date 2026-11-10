@@ -11,6 +11,7 @@ import { Store } from '../agent/core/store.js';
 import { LogStore } from '../agent/core/logs.js';
 import { Runner } from '../agent/core/runner.js';
 import { createServer } from '../agent/core/server.js';
+import { createAuth } from '../agent/core/auth.js';
 import { platform } from '../agent/platform/index.js';
 import { WEB_DIR } from '../agent/paths.js';
 
@@ -104,11 +105,12 @@ const fakePorts = {
   guessServer: async (p) => ({ port: p, off: false, pid: 5, proc: 'node.exe', cwd: 'C:\\app', command: 'npm run dev' }),
 };
 const port = 19765 + Math.floor(Math.random() * 1000);
-const server = createServer({ store, runner, logs, platform, autostartSupported: false, port, webDir: WEB_DIR, ports: fakePorts });
+const server = createServer({ store, runner, logs, platform, autostartSupported: false, port, webDir: WEB_DIR, auth: createAuth({ file: path.join(dir, 'auth.json'), cookie: 'docket_jobs_session' }), ports: fakePorts });
 await new Promise((r) => server.listen(port, '127.0.0.1', r));
 after(() => { runner.shutdown(); server.close(); });
 const base = `http://127.0.0.1:${port}`;
-const headers = { 'X-Docket-Jobs': '1' };
+const setup = await fetch(`${base}/api/auth/setup`, { method: 'POST', headers: { 'X-Docket-Jobs': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'alice', password: 'correct horse' }) });
+const headers = { 'X-Docket-Jobs': '1', Cookie: setup.headers.get('set-cookie').split(';')[0] };
 
 test('lists running servers, leaving out docket-jobs itself', async () => {
   const res = await fetch(`${base}/api/ports`, { headers });

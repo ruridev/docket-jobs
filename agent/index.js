@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import path from 'node:path';
 import { DATA_DIR, LOG_DIR, WEB_DIR, DEFAULT_PORT } from './paths.js';
 import { Store } from './core/store.js';
 import { LogStore } from './core/logs.js';
@@ -6,8 +7,14 @@ import { Runner } from './core/runner.js';
 import { createServer } from './core/server.js';
 import { StartupImporter } from './core/startup.js';
 import { platform, autostartSupported } from './platform/index.js';
+import { createAuth } from './core/auth.js';
 
 const args = process.argv.slice(2);
+const auth = createAuth({ file: path.join(DATA_DIR, 'auth.json'), cookie: 'docket_jobs_session' });
+if (args.includes('--reset-password')) {
+  console.log(auth.reset() ? 'Removed the account. Open docket-jobs to create it again.' : 'There is no account.');
+  process.exit(0);
+}
 const autorun = !args.includes('--no-autorun');
 const portArg = args.find((a) => a.startsWith('--port='));
 const port = portArg ? Number(portArg.split('=')[1]) : Number(process.env.DOCKET_JOBS_PORT) || DEFAULT_PORT;
@@ -24,7 +31,7 @@ const store = new Store(DATA_DIR);
 const logs = new LogStore(LOG_DIR);
 const runner = new Runner({ store, logs, platform });
 const importer = new StartupImporter({ store, runner, logs, platform, dataDir: DATA_DIR });
-const server = createServer({ store, runner, logs, platform, autostartSupported, port, webDir: WEB_DIR, importer });
+const server = createServer({ store, runner, logs, platform, autostartSupported, port, webDir: WEB_DIR, auth, importer });
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {

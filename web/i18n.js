@@ -51,6 +51,8 @@ export const I18N = {
     theme: '화면 테마', themeDesc: '그린을 고르면 Google Fonts에서 글꼴을 불러와요.',
     themeNames: { auto: '시스템 설정', light: '라이트', dark: '다크', green: '그린', g6: '픽셀' },
     language: '표시 언어', autoStart: 'PC를 켤 때 docket-jobs 시작', autoStartDesc: '끄면 어떤 작업도 자동으로 실행되지 않아요.',
+    account: '계정', signedInAs: '{name}(으)로 로그인했어요. 이 PC에만 저장된 계정이에요.', signOut: '로그아웃',
+    resetHelp: '비밀번호를 잊었다면 이 PC에서 아래 명령을 실행하세요. 계정만 지워지고 데이터는 그대로예요.',
     autoStartUnsupported: '이 OS에서는 아직 지원하지 않아요.', errAutostart: '자동 시작 설정을 바꾸지 못했어요.',
     log: {
       started: (pid) => `시작함 (PID ${pid})`, manual: (pid) => `수동으로 시작함 (PID ${pid})`, restarted: (pid) => `다시 시작함 (PID ${pid})`,
@@ -105,6 +107,8 @@ export const I18N = {
     theme: 'Theme', themeDesc: 'The green theme loads its fonts from Google Fonts.',
     themeNames: { auto: 'System', light: 'Light', dark: 'Dark', green: 'Green', g6: 'Pixel' },
     language: 'Display language', autoStart: 'Start docket-jobs with your PC', autoStartDesc: 'When off, no job runs automatically.',
+    account: 'Account', signedInAs: 'Signed in as {name}. The account is kept on this PC only.', signOut: 'Sign out',
+    resetHelp: 'Forgot the password? Run this command on this PC. Only the account is removed; your data stays.',
     autoStartUnsupported: 'Not supported on this OS yet.', errAutostart: 'Couldn’t change the startup setting.',
     log: {
       started: (pid) => `Started (PID ${pid})`, manual: (pid) => `Started manually (PID ${pid})`, restarted: (pid) => `Restarted (PID ${pid})`,
@@ -159,6 +163,8 @@ export const I18N = {
     theme: '画面テーマ', themeDesc: 'グリーンを選ぶと Google Fonts からフォントを読み込みます。',
     themeNames: { auto: 'システム設定', light: 'ライト', dark: 'ダーク', green: 'グリーン', g6: 'ピクセル' },
     language: '表示言語', autoStart: 'PCの起動時にdocket-jobsを開始', autoStartDesc: 'オフにすると、どのジョブも自動では実行されません。',
+    account: 'アカウント', signedInAs: '{name} でサインインしています。この PC にだけ保存されたアカウントです。', signOut: 'サインアウト',
+    resetHelp: 'パスワードを忘れたときは、この PC で次のコマンドを実行してください。アカウントだけが消え、データはそのままです。',
     autoStartUnsupported: 'このOSではまだ対応していません。', errAutostart: '自動起動の設定を変更できませんでした。',
     log: {
       started: (pid) => `開始しました (PID ${pid})`, manual: (pid) => `手動で開始しました (PID ${pid})`, restarted: (pid) => `再起動しました (PID ${pid})`,

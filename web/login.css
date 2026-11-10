@@ -1,0 +1,47 @@
+/* Sign-in page. The same file in docket, docket-gits and docket-jobs: keep them identical. */
+@font-face { font-family: "Fusion Pixel KO"; src: url("fonts/pixel.ttf") format("truetype"); font-display: swap; unicode-range: U+0020-024F, U+2000-2BFF, U+3000-30FF, U+3130-318F, U+4E00-9FFF, U+AC00-D7A3, U+FF00-FFEF; }
+:root, :root[data-theme="light"] { --bg: #f6f8fa; --panel: #ffffff; --border: #d0d7de; --text: #1f2328; --muted: #656d76; --accent: #0969da; --accent-text: #ffffff; --danger: #cf222e; color-scheme: light; }
+:root[data-theme="dark"] { --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8d96a0; --accent: #2f81f7; --accent-text: #ffffff; --danger: #f85149; color-scheme: dark; }
+:root[data-theme="green"] { --bg: #0b1410; --panel: #111d17; --border: #24412f; --text: #d6f2e0; --muted: #8fb39d; --accent: #2bff88; --accent-text: #04140a; --danger: #ff7f7f; color-scheme: dark; }
+:root[data-theme="g6"] { --bg: #e2e2e0; --panel: #f1f1ef; --border: #b0b0ae; --text: #1b1b1b; --muted: #4f4f4f; --accent: #1b1b1b; --accent-text: #ffffff; --danger: #d6262a; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) { --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8d96a0; --accent: #2f81f7; --accent-text: #ffffff; --danger: #f85149; color-scheme: dark; } }
+:root { --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", "Hiragino Sans", "Yu Gothic UI", "Apple SD Gothic Neo", sans-serif; --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, "D2Coding", monospace; }
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.5; }
+button, input { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.auth { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+.auth-card { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 24px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 16px 48px rgba(1, 4, 9, .12); }
+.auth-brand { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; }
+.auth-brand svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.auth-card h1 { margin: 4px 0 0; font-size: 17px; }
+.auth-help { margin: -6px 0 0; color: var(--muted); font-size: 13px; }
+.auth-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.auth-field input { height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; width: 100%; }
+.auth-field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.auth-err { margin: 0; color: var(--danger); font-size: 13px; }
+.auth-err:empty { display: none; }
+.auth-btn { height: 36px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text); font-size: 14px; cursor: pointer; }
+.auth-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.auth-btn:disabled { cursor: default; opacity: .6; }
+.auth-note { margin: 0; color: var(--muted); font-size: 12px; }
+.auth-note code { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+
+/* green */
+:root[data-theme="green"] body { font-family: "IBM Plex Sans KR", var(--font); }
+:root[data-theme="green"] :is(.auth-brand, .auth-card h1) { font-family: "Barlow Condensed", "IBM Plex Sans KR", sans-serif; text-transform: uppercase; letter-spacing: .04em; font-weight: 500; }
+:root[data-theme="green"] .auth-brand { font-weight: 300; letter-spacing: 0; color: var(--accent); }
+:root[data-theme="green"] .auth-btn { font-family: "Space Mono", "IBM Plex Sans KR", monospace; text-transform: uppercase; letter-spacing: .06em; border-radius: 3px; }
+:root[data-theme="green"] .auth-card { border-color: var(--accent); border-radius: 4px; }
+:root[data-theme="green"] .auth-field input { border-radius: 3px; }
+/* pixel (g6) */
+:root[data-theme="g6"] body { font-family: "Fusion Pixel KO", "Hiragino Sans", "Yu Gothic UI", Meiryo, ui-monospace, sans-serif; }
+:root[data-theme="g6"] { --mono: "Fusion Pixel KO", ui-monospace, monospace; }
+:root[data-theme="g6"] body * { border-radius: 0 !important; box-shadow: none !important; font-weight: 400 !important; }
+:root[data-theme="g6"] .auth-card { border: 2px solid var(--text); }
+:root[data-theme="g6"] .auth-field input { background: #fff; border-color: #8a8a88; }
+:root[data-theme="g6"] .auth-btn { background: #3a3a3a; border-color: #3a3a3a; color: var(--panel); }

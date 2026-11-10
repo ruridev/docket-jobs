@@ -45,9 +45,10 @@ function readBody(req, limit = 64 * 1024) {
  *  - Host must be 127.0.0.1/localhost (blocks DNS rebinding)
  *  - every API request needs the X-Docket-Jobs header, which a cross-site page cannot send
  *    without a CORS preflight that this server never approves, and a matching Origin when one is sent
- * There is no token: any program on this PC that can reach 127.0.0.1 can use the API.
+ *  - every other API request needs the owner's session (auth: see auth.js); signed out, the
+ *    page is the sign-in page
  */
-export function createServer({ store, runner, logs, platform, autostartSupported, port, webDir, importer = null, ports = realPorts }) {
+export function createServer({ store, runner, logs, platform, autostartSupported, port, webDir, auth, importer = null, ports = realPorts }) {
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
   // The docket portal embeds this UI; nothing else may frame it.
@@ -160,6 +161,8 @@ export function createServer({ store, runner, logs, platform, autostartSupported
   function serveStatic(req, res, url) {
     let rel = decodeURIComponent(url.pathname);
     if (rel === '/') rel = '/index.html';
+    // Signed out, the app page is the sign-in page (its files are public; the API is not).
+    if (rel === '/index.html' && !auth.user(req)) rel = '/login.html';
     const file = path.resolve(webDir, '.' + rel);
     if (!file.startsWith(path.resolve(webDir) + path.sep)) { res.writeHead(403); return res.end(); }
     fs.readFile(file, (err, data) => {
@@ -183,6 +186,9 @@ export function createServer({ store, runner, logs, platform, autostartSupported
         if (req.headers['x-docket-jobs'] !== '1' || (origin && !allowedOrigins.has(origin))) {
           return send(res, 403, { error: 'forbidden' });
         }
+        const signIn = await auth.route(req, res, url.pathname, () => readBody(req));
+        if (signIn) return send(res, signIn.status, signIn.body);
+        if (!auth.user(req)) return send(res, 401, { error: 'signin' });
         return await api(req, res, url);
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }

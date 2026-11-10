@@ -12,6 +12,7 @@ const state = {
   editId: null,
   delId: null,
   settingsError: false,
+  user: '', // the signed-in name, shown in the settings
   // manualKey: the macOS app agent whose "switch it off in System Settings" steps are open.
   // notice: name of an item that was undone but must be switched back on by the user.
   startup: { loading: false, items: [], imported: [], notes: [], error: false, busy: null, manualKey: null, notice: null },
@@ -80,6 +81,8 @@ async function api(method, url, body, timeoutMs = 5000) {
     // Without a timeout a hung connection would leave the page showing "Active" forever.
     signal: AbortSignal.timeout(timeoutMs),
   });
+  // Signed out (or the session ran out): reloading shows the sign-in page.
+  if (res.status === 401) { location.reload(); return new Promise(() => {}); }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error || String(res.status)), { data });
   return data;
@@ -273,6 +276,14 @@ function renderSettings() {
           <div class="desc">${esc(T.themeDesc)}</div>
         </div>
         <div class="theme-grid" role="radiogroup" aria-labelledby="themeLabel">${themeCards()}</div>
+      </div>
+      <div class="setting">
+        <div class="setting-label">
+          <div class="name">${esc(T.account)}</div>
+          <div class="desc">${esc(T.signedInAs.replace('{name}', state.user))}</div>
+          <div class="desc">${esc(T.resetHelp)} <code>node agent/index.js --reset-password</code></div>
+        </div>
+        <button class="btn" data-action="signOut">${esc(T.signOut)}</button>
       </div>
     </div>`;
 }
@@ -473,7 +484,12 @@ const actions = {
   add: () => openJobDialog(null),
   open: (id) => { state.view = 'detail'; state.curId = id; state.logs = []; },
   back: () => { state.view = 'list'; },
-  settings: () => { state.view = 'settings'; state.settingsError = false; },
+  settings: () => {
+    state.view = 'settings';
+    state.settingsError = false;
+    api('GET', '/api/auth').then((d) => { state.user = d.user || ''; render(); }, () => {});
+  },
+  signOut: async () => { await api('POST', '/api/auth/logout'); location.reload(); },
   import: () => {
     state.view = 'import';
     state.startup.error = false;

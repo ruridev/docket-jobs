@@ -26,7 +26,7 @@ It works on Windows and macOS.
 
    There are no dependencies, so there is no `npm install`. Use `npm run dev` to start the agent without running any jobs.
 
-2. Open http://127.0.0.1:8765 and add your jobs.
+2. Open http://127.0.0.1:8765, create your account (see [Signing in](#signing-in)) and add your jobs.
 3. Make docket-jobs start at login, either with **Settings → Start docket-jobs with your PC** or:
 
    ```bash
@@ -49,6 +49,15 @@ To update, stop the agent, run `git pull` and start it again, or log in again if
 1. **Undo any imported startup items in the UI first.** The original entries are saved only in `data/`, so they cannot be restored once it is gone.
 2. Run `npm run autostart:off`.
 3. Stop the running jobs in the UI, stop the agent, and delete the folder.
+
+## Signing in
+
+The first time you open docket-jobs, it asks you to create an account: a name and a password of 8 characters or more. There is one account and no email, because nothing is ever sent out and the account only guards this app on this PC. From then on every API call needs the signed-in session.
+
+- The account is kept in `data/auth.json` (0600): a scrypt hash of the password and the secret that signs the session cookie. A session lasts 30 days and survives restarts.
+- Forgot the password? Run `node agent/index.js --reset-password` in this folder. It removes only the account; your data stays, and the next visit asks you to create the account again.
+- Create the account right after the first start: until then, any program on this PC that can reach the port could create it first.
+- docket, docket-gits and docket-jobs each have their own account. Inside the docket portal, each tool shows its own sign-in page the first time.
 
 ## How it works
 
@@ -80,6 +89,7 @@ Importing turns the original entry off (or moves it to `data/startup-backup/`; f
 
 | Path | Contents |
 | --- | --- |
+| `data/auth.json` | The sign-in account (password hash and session secret) |
 | `data/jobs.json` | Jobs |
 | `data/state.json` | PIDs of running jobs |
 | `data/logs/<id>.jsonl` | Log per job (agent messages and program output) |
@@ -95,7 +105,7 @@ Theme and language are saved in the browser only.
 - **Jobs run their command with your user's permissions.** Do not add a command you do not trust.
 - **Importing changes your OS startup items.** You can undo it from the UI as long as `data/` is kept.
 - The UI and the API listen on `127.0.0.1` only. Because the API can run any command, the server checks the `Host` header, the `Origin` header and a custom `X-Docket-Jobs` header to reject requests from other web pages.
-- The API has no password or token: any program on this PC that can reach `127.0.0.1` (a container, for example) can use it. Don't run docket-jobs on a PC you share with other people.
+- The API needs the signed-in session (see [Signing in](#signing-in)). A program running as your user can still read `data/`, so this is no defense against malware on your account. Don't run docket-jobs on a PC you share with other people.
 - Only the docket portal (`http://localhost:4600`) may embed the UI in a frame. Change this with `DOCKET_FRAME_ANCESTORS`.
 - Undoing an import never takes a path from `data/imports.json` for an admin command: `/Library/LaunchAgents` items are restored only from the root-owned backup folder, by file name.
 
