@@ -3,7 +3,7 @@
  * page follows the OS light/dark setting. Shapes (fonts, corners, buttons) per theme are at
  * the end of this file.
  */
-@font-face { font-family: "Fusion Pixel KO"; src: url("fonts/pixel.ttf") format("truetype"); font-display: swap; unicode-range: U+0020-024F, U+2000-2BFF, U+3130-318F, U+AC00-D7A3; }
+@font-face { font-family: "Fusion Pixel KO"; src: url("fonts/pixel.ttf") format("truetype"); font-display: swap; unicode-range: U+0020-024F, U+2000-2BFF, U+3000-30FF, U+3130-318F, U+4E00-9FFF, U+AC00-D7A3, U+FF00-FFEF; }
 :root, :root[data-theme="light"] { --bg: #f6f8fa; --panel: #ffffff; --lane: #eef1f4; --border: #d0d7de; --text: #1f2328; --muted: #656d76; --accent: #0969da; --accent-text: #ffffff; --ok: #1a7f37; --warn: #9a6700; --danger: #cf222e; --orange: #bc4c00; --merged: #8250df; --chip: #eaeef2; color-scheme: light; }
 :root[data-theme="dark"] { --bg: #0d1117; --panel: #161b22; --lane: #10151c; --border: #30363d; --text: #e6edf3; --muted: #8d96a0; --accent: #2f81f7; --accent-text: #ffffff; --ok: #3fb950; --warn: #d29922; --danger: #f85149; --orange: #db6d28; --merged: #a371f7; --chip: #21262d; color-scheme: dark; }
 :root[data-theme="green"] { --bg: #0b1410; --panel: #111d17; --lane: #0e1913; --border: #24412f; --text: #d6f2e0; --muted: #8fb39d; --accent: #2bff88; --accent-text: #04140a; --ok: #5be39a; --warn: #e6c35c; --danger: #ff7f7f; --orange: #ffa45c; --merged: #c39cff; --chip: #18291f; color-scheme: dark; }
