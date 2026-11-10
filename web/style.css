@@ -52,7 +52,7 @@ button { cursor: pointer; }
 .topbar { height: 48px; background: var(--surface); border-bottom: 1px solid var(--line); }
 .topbar-inner { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 8px 0 14px; }
 .topbar .icon-btn { width: 32px; height: 32px; border-radius: 6px; }
-.brand { flex: 1; font-size: 18px; font-weight: 600; color: var(--ink); text-decoration: none; }
+.brand { flex: 1; display: flex; align-items: center; gap: 6px; font-size: 18px; font-weight: 600; color: var(--ink); text-decoration: none; }
 /* Green "Active" normally; orange with a message when the agent can't be reached. */
 .agent-status { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; font-size: 13px; font-weight: 600; color: var(--running); }
 .agent-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
