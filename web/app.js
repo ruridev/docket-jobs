@@ -58,12 +58,6 @@ const $ = (sel) => document.querySelector(sel);
 const LANG_KEY = 'docket-jobs-lang';
 function savedLang() {
   try {
-    // Carry over a choice saved before the rename from b_jobs.
-    const old = localStorage.getItem('bjobs-lang');
-    if (old !== null) {
-      if (localStorage.getItem(LANG_KEY) === null) localStorage.setItem(LANG_KEY, old);
-      localStorage.removeItem('bjobs-lang');
-    }
     const l = localStorage.getItem(LANG_KEY);
     return I18N[l] ? l : null;
   } catch { return null; }

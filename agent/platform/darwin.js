@@ -14,8 +14,6 @@ export function spawnJob(command, { cwd, stdio }) {
 
 const LABEL = process.env.DOCKET_JOBS_AUTOSTART_NAME || 'com.ruridev.docket-jobs';
 const PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', `${LABEL}.plist`);
-// Login entry written before the project was renamed from b_jobs.
-const LEGACY_PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', 'com.ruridev.bjobs.plist');
 
 function xml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -67,18 +65,16 @@ export function disableAutostart() {
 }
 
 /**
- * Keeps the login entry pointing at this copy of the agent: replaces a plist left under the old
- * b_jobs label, and rewrites one whose path is stale (the folder was moved).
+ * Keeps the login entry pointing at this copy of the agent: rewrites one whose path is stale
+ * (the folder was moved).
  * Returns true if anything changed. With a custom label (tests), real entries are left alone.
  */
 export function syncAutostart() {
   if (process.env.DOCKET_JOBS_AUTOSTART_NAME) return false;
-  const legacy = fs.existsSync(LEGACY_PLIST);
   let current = null;
   try { current = fs.readFileSync(PLIST, 'utf8'); } catch { /* not enabled */ }
-  if (!legacy && (current === null || current.includes(xml(AGENT_ENTRY)))) return false;
+  if (current === null || current.includes(xml(AGENT_ENTRY))) return false;
   enableAutostart();
-  if (legacy) fs.rmSync(LEGACY_PLIST, { force: true });
   return true;
 }
 
@@ -157,7 +153,7 @@ async function scanAgentDir(dir, off, opts) {
   try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.plist')); } catch { return items; }
   for (const file of files) {
     const full = path.join(dir, file);
-    if (full === PLIST || full === LEGACY_PLIST) continue;
+    if (full === PLIST) continue;
     let p;
     try { p = JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', full])).stdout); } catch { continue; }
     if (off.has(p.Label)) continue;

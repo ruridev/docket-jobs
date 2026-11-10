@@ -27,8 +27,6 @@ export function spawnJob(command, { cwd, hidden, stdio }) {
 // HKCU Run works without admin rights, unlike a logon task in Task Scheduler.
 const RUN_KEY = process.env.DOCKET_JOBS_RUN_KEY || 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
 const VALUE_NAME = process.env.DOCKET_JOBS_AUTOSTART_NAME || 'docket-jobs';
-// Name used before the project was renamed from b_jobs.
-const LEGACY_VALUE_NAME = 'b_jobs';
 
 function reg(args) {
   return spawnSync('reg', args, { windowsHide: true, encoding: 'utf8' });
@@ -56,18 +54,15 @@ export function disableAutostart() {
 }
 
 /**
- * Keeps the login entry pointing at this copy of the agent: moves an entry left under the old
- * b_jobs name to the current name, and rewrites one whose path is stale (the folder was moved).
+ * Keeps the login entry pointing at this copy of the agent: rewrites one whose path is stale
+ * (the folder was moved).
  * Returns true if anything changed. With a custom entry name (tests), real entries are left alone.
  */
 export function syncAutostart() {
   if (process.env.DOCKET_JOBS_AUTOSTART_NAME) return false;
-  const values = regValues(RUN_KEY);
-  const legacy = values.find((v) => v.name === LEGACY_VALUE_NAME);
-  const current = values.find((v) => v.name === VALUE_NAME);
-  if (!legacy && (!current || current.value.includes(AGENT_ENTRY))) return false;
+  const current = regValues(RUN_KEY).find((v) => v.name === VALUE_NAME);
+  if (!current || current.value.includes(AGENT_ENTRY)) return false;
   enableAutostart();
-  if (legacy) reg(['delete', RUN_KEY, '/v', LEGACY_VALUE_NAME, '/f']);
   return true;
 }
 
@@ -265,7 +260,7 @@ function scanRunAndFolder() {
   const runOff = disabledByTaskManager('Run');
   for (const v of regValues(RUN_KEY)) {
     // Skip docket-jobs itself, whatever name it was registered under.
-    if (v.name === VALUE_NAME || v.name === LEGACY_VALUE_NAME || v.value.includes(AGENT_ENTRY) || runOff.has(v.name)) continue;
+    if (v.name === VALUE_NAME || v.value.includes(AGENT_ENTRY) || runOff.has(v.name)) continue;
     if (v.type !== 'REG_SZ' && v.type !== 'REG_EXPAND_SZ') continue;
     items.push({ key: `run:${v.name}`, name: v.name, source: 'run', command: v.value, data: v });
   }

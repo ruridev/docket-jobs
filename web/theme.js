@@ -24,12 +24,6 @@
 
   var saved = '';
   try {
-    // Carry over a theme saved before the rename from b_jobs.
-    var old = localStorage.getItem('bjobs-theme');
-    if (old !== null) {
-      if (localStorage.getItem(KEY) === null) localStorage.setItem(KEY, old);
-      localStorage.removeItem('bjobs-theme');
-    }
     saved = localStorage.getItem(KEY) || '';
   } catch (e) { /* ignore */ }
   apply(saved);
