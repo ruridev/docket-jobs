@@ -160,8 +160,7 @@ dl { margin: 0; }
 .check input { width: 18px; height: 18px; }
 .form-error { margin: 0; font-size: 14px; color: var(--failed); font-weight: 600; }
 
-.logo rect { fill: var(--text); }
-.logo path { stroke: var(--panel); }
+.logo { fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
 /* Theme picker: each sample shows the theme's own colors (same values as the palettes above). */
 .setting.stack { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
