@@ -21,7 +21,8 @@ await new Promise((r) => server.listen(port, '127.0.0.1', r));
 after(() => { runner.shutdown(); server.close(); });
 
 const base = `http://127.0.0.1:${port}`;
-const json = { 'Content-Type': 'application/json', 'X-Docket-Jobs': '1' };
+const auth = { 'X-Docket-Jobs': '1' };
+const json = { 'Content-Type': 'application/json', ...auth };
 
 test('serves the UI', async () => {
   const res = await fetch(`${base}/`);
@@ -29,10 +30,10 @@ test('serves the UI', async () => {
   assert.match(await res.text(), /<title>docket-jobs<\/title>/);
 });
 
-test('lets only local pages frame the UI', async () => {
+test('lets only the docket portal frame the UI', async () => {
   const res = await fetch(`${base}/`);
   const fa = /frame-ancestors([^;]*)/.exec(res.headers.get('content-security-policy'))[1].trim();
-  assert.equal(fa, 'http://localhost:* http://127.0.0.1:*');
+  assert.equal(fa, "'self' http://localhost:4600 http://127.0.0.1:4600");
   assert.equal(res.headers.get('x-frame-options'), null);
 });
 
@@ -40,6 +41,15 @@ test('rejects changes without the X-Docket-Jobs header', async () => {
   const res = await fetch(`${base}/api/jobs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"name":"a","command":"b"}' });
   assert.equal(res.status, 403);
   assert.equal(store.jobs.length, 0);
+});
+
+test('rejects reads without the X-Docket-Jobs header', async () => {
+  const res = await fetch(`${base}/api/state`);
+  assert.equal(res.status, 403);
+});
+
+test('accepts API requests with the X-Docket-Jobs header and no token', async () => {
+  assert.equal((await fetch(`${base}/api/state`, { headers: auth })).status, 200);
 });
 
 test('rejects changes from another origin', async () => {
@@ -50,7 +60,7 @@ test('rejects changes from another origin', async () => {
 test('rejects a foreign Host header', async () => {
   const http = await import('node:http');
   const status = await new Promise((resolve) => {
-    http.get({ host: '127.0.0.1', port, path: '/api/state', headers: { Host: 'evil.example' } }, (res) => resolve(res.statusCode));
+    http.get({ host: '127.0.0.1', port, path: '/api/state', headers: { ...auth, Host: 'evil.example' } }, (res) => resolve(res.statusCode));
   });
   assert.equal(status, 403);
 });
@@ -66,7 +76,7 @@ test('creates, edits and deletes a job', async () => {
   res = await fetch(`${base}/api/jobs`, { method: 'POST', headers: json, body: JSON.stringify({ name: '' , command: 'x' }) });
   assert.equal(res.status, 400);
 
-  res = await fetch(`${base}/api/state`);
+  res = await fetch(`${base}/api/state`, { headers: auth });
   const state = await res.json();
   assert.equal(state.jobs.length, 1);
   assert.equal(state.settings.autoStartSupported, false);
@@ -85,4 +95,26 @@ test('server settings hold only autostart; language and theme live in the browse
 test('serves the theme script and pixel font', async () => {
   assert.equal((await fetch(`${base}/theme.js`)).status, 200);
   assert.equal((await fetch(`${base}/fonts/pixel.ttf`)).headers.get('content-type'), 'font/ttf');
+});
+
+test('the frame-ancestors list can be changed with DOCKET_FRAME_ANCESTORS', async () => {
+  process.env.DOCKET_FRAME_ANCESTORS = 'http://localhost:9999';
+  const p = port + 1000;
+  const srv = createServer({ store, runner, logs, platform, autostartSupported: false, port: p, webDir: WEB_DIR });
+  delete process.env.DOCKET_FRAME_ANCESTORS;
+  await new Promise((r) => srv.listen(p, '127.0.0.1', r));
+  try {
+    const res = await fetch(`http://127.0.0.1:${p}/`);
+    assert.match(res.headers.get('content-security-policy'), /frame-ancestors http:\/\/localhost:9999$/);
+  } finally {
+    srv.close();
+  }
+});
+
+test('the data folder and its files are owner-only', { skip: process.platform === 'win32' && 'POSIX modes only' }, async () => {
+  const d = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'docket-jobs-data-')), 'data');
+  fs.mkdirSync(d, { mode: 0o755 });
+  new Store(d).saveJobs();
+  assert.equal(fs.statSync(d).mode & 0o777, 0o700);
+  assert.equal(fs.statSync(path.join(d, 'jobs.json')).mode & 0o777, 0o600);
 });

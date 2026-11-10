@@ -43,7 +43,7 @@ export class StartupImporter {
     const backup = await this.platform.disableStartupItem(item, this.backupDir);
     const res = this.store.addJob({ name: item.name, command: item.command, cwd: item.cwd || '', delay: item.delay || 0, hidden: true });
     if (res.error) {
-      await this.platform.restoreStartupItem(backup);
+      await this.platform.restoreStartupItem(backup, key, this.backupDir);
       return res;
     }
     this.records.push({ key, name: item.name, source: item.source, backup, jobId: res.job.id, at: new Date().toISOString() });
@@ -54,7 +54,7 @@ export class StartupImporter {
   async undo(key) {
     const rec = this.records.find((r) => r.key === key);
     if (!rec) return { error: 'not_found' };
-    const restored = await this.platform.restoreStartupItem(rec.backup);
+    const restored = await this.platform.restoreStartupItem(rec.backup, rec.key, this.backupDir);
     if (this.store.getJob(rec.jobId)) {
       this.runner.forget(rec.jobId);
       this.store.removeJob(rec.jobId);

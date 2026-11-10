@@ -108,17 +108,18 @@ const server = createServer({ store, runner, logs, platform, autostartSupported:
 await new Promise((r) => server.listen(port, '127.0.0.1', r));
 after(() => { runner.shutdown(); server.close(); });
 const base = `http://127.0.0.1:${port}`;
+const headers = { 'X-Docket-Jobs': '1' };
 
 test('lists running servers, leaving out docket-jobs itself', async () => {
-  const res = await fetch(`${base}/api/ports`);
+  const res = await fetch(`${base}/api/ports`, { headers });
   assert.equal(res.status, 200);
   assert.equal((await res.json()).servers[0].port, 3000);
   assert.deepEqual(calls.at(-1).exclude, [port]);
 });
 
 test('guesses how the server on a port was started', async () => {
-  const res = await fetch(`${base}/api/ports/3000`);
+  const res = await fetch(`${base}/api/ports/3000`, { headers });
   assert.deepEqual(await res.json(), { port: 3000, off: false, pid: 5, proc: 'node.exe', cwd: 'C:\\app', command: 'npm run dev' });
-  assert.equal((await fetch(`${base}/api/ports/abc`)).status, 404);
-  assert.equal((await fetch(`${base}/api/ports/70000`)).status, 404);
+  assert.equal((await fetch(`${base}/api/ports/abc`, { headers })).status, 404);
+  assert.equal((await fetch(`${base}/api/ports/70000`, { headers })).status, 404);
 });

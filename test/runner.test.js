@@ -111,3 +111,53 @@ test('a missing working folder fails without spawning', () => {
   assert.ok(logs.tail(job.id).some((e) => e.k === 'cwdMissing'));
   runner.shutdown();
 });
+
+test('saved pids from another boot, or of a process that started later, are not adopted', async () => {
+  const { spawn } = await import('node:child_process');
+  // A live process that is not the job: stands in for a pid that was reused.
+  const other = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  try {
+    const { dir, store, logs } = setup();
+    const { job } = store.addJob({ name: 'old', command: 'echo hi', enabled: false });
+    const boot = Date.now() - os.uptime() * 1000;
+    const startedAt = new Date().toISOString();
+    const states = [
+      { bootTime: boot - 3600 * 1000, jobs: { [job.id]: { pid: other.pid, startedAt } } },
+      { bootTime: boot, jobs: { [job.id]: { pid: other.pid, startedAt: new Date(Date.now() - 3600 * 1000).toISOString() } } },
+    ];
+    for (const state of states) {
+      fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify(state));
+      const runner = new Runner({ store, logs, platform, restartDelayMs: 100, pollMs: 50 });
+      runner.boot({ autorun: false });
+      assert.equal(runner.status(job.id).status, 'stopped');
+      runner.shutdown();
+    }
+    // Same boot and start time: adopted.
+    fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ bootTime: boot, jobs: { [job.id]: { pid: other.pid, startedAt } } }));
+    const runner = new Runner({ store, logs, platform, restartDelayMs: 100, pollMs: 50 });
+    runner.boot({ autorun: false });
+    assert.equal(runner.status(job.id).status, 'running');
+    runner.shutdown();
+  } finally {
+    other.kill();
+  }
+});
+
+test('stopping an adopted job does not kill a process that reused its pid', async () => {
+  const { spawn } = await import('node:child_process');
+  const other = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  try {
+    const { store, logs } = setup();
+    const { job } = store.addJob({ name: 'old', command: 'echo hi', enabled: false });
+    const runner = new Runner({ store, logs, platform, restartDelayMs: 100, pollMs: 50 });
+    Object.assign(runner.rec(job.id), { status: 'running', pid: other.pid, adopted: true,
+      startedAt: new Date(Date.now() - 3600 * 1000).toISOString() });
+    runner.stop(job.id);
+    assert.equal(runner.status(job.id).status, 'stopped');
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(platform.isAlive(other.pid), true);
+    runner.shutdown();
+  } finally {
+    other.kill();
+  }
+});

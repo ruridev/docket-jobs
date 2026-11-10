@@ -43,12 +43,15 @@ function readBody(req, limit = 64 * 1024) {
  * other web pages must never get through:
  *  - only listens on 127.0.0.1
  *  - Host must be 127.0.0.1/localhost (blocks DNS rebinding)
- *  - changes need the X-Docket-Jobs header, which a cross-site page cannot send without a CORS
- *    preflight that this server never approves, and a matching Origin when one is sent
+ *  - every API request needs the X-Docket-Jobs header, which a cross-site page cannot send
+ *    without a CORS preflight that this server never approves, and a matching Origin when one is sent
+ * There is no token: any program on this PC that can reach 127.0.0.1 can use the API.
  */
 export function createServer({ store, runner, logs, platform, autostartSupported, port, webDir, importer = null, ports = realPorts }) {
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
+  // The docket portal embeds this UI; nothing else may frame it.
+  const frameAncestors = process.env.DOCKET_FRAME_ANCESTORS || "'self' http://localhost:4600 http://127.0.0.1:4600";
 
   const jobView = (job) => ({ ...job, ...runner.status(job.id) });
   // Display language and theme are kept in the browser; the only server-side setting is
@@ -165,7 +168,7 @@ export function createServer({ store, runner, logs, platform, autostartSupported
         'Content-Type': MIME[path.extname(file)] || 'application/octet-stream',
         'Cache-Control': 'no-cache',
         'X-Content-Type-Options': 'nosniff',
-        'Content-Security-Policy': "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors http://localhost:* http://127.0.0.1:*",
+        'Content-Security-Policy': `default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors ${frameAncestors}`,
       });
       res.end(data);
     });
@@ -176,11 +179,9 @@ export function createServer({ store, runner, logs, platform, autostartSupported
       if (!allowedHosts.has(req.headers.host || '')) { res.writeHead(403); return res.end('Forbidden host'); }
       const url = new URL(req.url, `http://${req.headers.host}`);
       if (url.pathname.startsWith('/api/')) {
-        if (req.method !== 'GET') {
-          const origin = req.headers.origin;
-          if (req.headers['x-docket-jobs'] !== '1' || (origin && !allowedOrigins.has(origin))) {
-            return send(res, 403, { error: 'forbidden' });
-          }
+        const origin = req.headers.origin;
+        if (req.headers['x-docket-jobs'] !== '1' || (origin && !allowedOrigins.has(origin))) {
+          return send(res, 403, { error: 'forbidden' });
         }
         return await api(req, res, url);
       }

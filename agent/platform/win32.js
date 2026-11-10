@@ -79,6 +79,15 @@ export function isAlive(pid) {
   }
 }
 
+/** When the process started (ms), or null if unknown. Tells a reused pid apart from our job. */
+export function processStartTime(pid) {
+  const res = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    `(Get-Process -Id ${Number(pid)} -ErrorAction Stop).StartTime.ToUniversalTime().ToString('o')`],
+  { windowsHide: true, encoding: 'utf8', timeout: 15000 });
+  const t = Date.parse((res.stdout || '').trim());
+  return res.status === 0 && Number.isFinite(t) ? t : null;
+}
+
 const CODEPAGES = { 949: 'euc-kr', 932: 'shift_jis', 936: 'gbk', 950: 'big5', 1252: 'windows-1252', 65001: 'utf-8' };
 
 /** Console programs write in the OEM code page; decode UTF-8 first, then fall back to it. */
@@ -144,8 +153,10 @@ $ids = @($me.Name, $env:USERNAME, $me.User.Value)
 # Groups leaves out deny-only groups, so a filtered admin token does not count as Administrators.
 $sids = @($me.User.Value) + @($me.Groups | ForEach-Object { $_.Value })
 $write = [Security.AccessControl.FileSystemRights]::Write
+# DJ_ALL=1: disabled tasks too (an imported task is disabled; undo looks it up again).
+$all = $env:DJ_ALL -eq '1'
 $out = @(Get-ScheduledTask | Where-Object {
-  $_.TaskPath -notlike '\\Microsoft\\*' -and $_.State -ne 'Disabled' -and
+  $_.TaskPath -notlike '\\Microsoft\\*' -and ($all -or $_.State -ne 'Disabled') -and
   ($ids -contains $_.Principal.UserId) -and
   @($_.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' -and $_.Enabled }).Count -gt 0
 } | ForEach-Object {
@@ -196,13 +207,18 @@ export function taskToItem(task) {
   };
 }
 
-async function scanTasks() {
-  const { stdout } = await powershell(LIST_TASKS);
+async function scanTasks({ all = false } = {}) {
+  const { stdout } = await powershell(LIST_TASKS, { DJ_ALL: all ? '1' : '0' });
   const list = JSON.parse(stdout.trim() || '[]');
   return (Array.isArray(list) ? list : [list]).map(taskToItem).filter(Boolean);
 }
 
-const psQuote = (s) => `'${String(s).replace(/'/g, "''")}'`;
+/** A single-quoted PowerShell literal. PowerShell also reads U+2018-U+201B as single quotes. */
+export const psQuote = (s) => `'${String(s).replace(/['\u2018\u2019\u201A\u201B]/g, '$&$&')}'`;
+
+/** A PowerShell expression for the string, passed as base64 UTF-8 so no character of it is ever parsed. */
+export const psString = (s) =>
+  `([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(${psQuote(Buffer.from(String(s), 'utf8').toString('base64'))})))`;
 const UAC_WAIT_MS = 180000;
 
 function startupError(code, cause) {
@@ -214,8 +230,8 @@ async function setTaskEnabled(path_, name, enabled, admin = false) {
   if (!admin) {
     // Names go through env vars so nothing in them is read as PowerShell code.
     try {
-      await powershell(`${verb} -TaskPath $env:BJ_TASK_PATH -TaskName $env:BJ_TASK_NAME | Out-Null`,
-        { BJ_TASK_PATH: path_, BJ_TASK_NAME: name });
+      await powershell(`${verb} -TaskPath $env:DJ_TASK_PATH -TaskName $env:DJ_TASK_NAME | Out-Null`,
+        { DJ_TASK_PATH: path_, DJ_TASK_NAME: name });
     } catch (err) {
       throw startupError('change_failed', err);
     }
@@ -223,12 +239,12 @@ async function setTaskEnabled(path_, name, enabled, admin = false) {
   }
 
   // Elevated: Windows shows the UAC prompt for this one command. An elevated process does
-  // not get our environment, so the names are passed as single-quoted literals inside an
-  // -EncodedCommand (quotes doubled), which PowerShell never evaluates as code.
-  const inner = `try { ${verb} -TaskPath ${psQuote(path_)} -TaskName ${psQuote(name)} -ErrorAction Stop | Out-Null; exit 0 } catch { exit 1 }`;
+  // not get our environment, so the names go in as base64 inside an -EncodedCommand and are
+  // decoded there; PowerShell never reads them as code.
+  const inner = `try { ${verb} -TaskPath ${psString(path_)} -TaskName ${psString(name)} -ErrorAction Stop | Out-Null; exit 0 } catch { exit 1 }`;
   const encoded = Buffer.from(inner, 'utf16le').toString('base64');
   const outer = `try {
-  $p = Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -Wait -PassThru -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',$env:BJ_ENC
+  $p = Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -Wait -PassThru -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',$env:DJ_ENC
 } catch {
   $e = $_.Exception
   while ($e) { if ($e.NativeErrorCode -eq 1223) { exit 3 }; $e = $e.InnerException }
@@ -236,7 +252,7 @@ async function setTaskEnabled(path_, name, enabled, admin = false) {
 }
 exit $p.ExitCode`;
   try {
-    await powershell(outer, { BJ_ENC: encoded }, UAC_WAIT_MS);
+    await powershell(outer, { DJ_ENC: encoded }, UAC_WAIT_MS);
   } catch (err) {
     // 3 = the user said No on the UAC prompt (ERROR_CANCELLED).
     throw startupError(err.code === 3 ? 'uac_cancelled' : 'admin_failed', err);
@@ -279,9 +295,20 @@ function scanRunAndFolder() {
   return items;
 }
 
+/**
+ * The task behind a startup item key, read again from Task Scheduler. Whether it needs admin,
+ * its path and its name are never taken from imports.json, which the user's programs can edit.
+ */
+async function findTask(key) {
+  const item = (await scanTasks({ all: true })).find((i) => i.key === key);
+  if (!item) throw new Error('task not found');
+  return item.data;
+}
+
 /** Turns the original entry off and returns what is needed to put it back. */
 export async function disableStartupItem(item, backupDir) {
   if (item.source === 'task') {
+    // item comes from the scan the import has just made, not from imports.json.
     // The task is only disabled, never deleted, so its other settings stay as they were.
     await setTaskEnabled(item.data.path, item.data.name, false, item.data.admin);
     return { kind: 'task', path: item.data.path, name: item.data.name, admin: item.data.admin };
@@ -302,9 +329,10 @@ export async function disableStartupItem(item, backupDir) {
   throw new Error(`unknown source ${item.source}`);
 }
 
-export async function restoreStartupItem(backup) {
+export async function restoreStartupItem(backup, key) {
   if (backup.kind === 'task') {
-    await setTaskEnabled(backup.path, backup.name, true, Boolean(backup.admin));
+    const task = await findTask(key);
+    await setTaskEnabled(task.path, task.name, true, task.admin);
     return;
   }
   if (backup.kind === 'run') {

@@ -3,6 +3,11 @@ import os from 'node:os';
 
 const MAX_OUT_BYTES = 5 * 1024 * 1024;
 const STABLE_RUN_MS = 60 * 1000;
+// Saved pids are only trusted from the same boot, and when the process started when the job did.
+const BOOT_SLACK_MS = 60 * 1000;
+const START_SLACK_MS = 10 * 1000;
+
+const bootTime = () => Date.now() - os.uptime() * 1000;
 
 function maxRestarts(policy) {
   if (policy === 'always') return Infinity;
@@ -44,12 +49,27 @@ export class Runner {
     return { status: r.status, pid: r.pid, exitCode: r.exitCode, startedAt: r.startedAt };
   }
 
+  /**
+   * Whether pid is still the job's process and not another one that got the pid after it ended.
+   * Where the start time cannot be read, a live pid from this boot is trusted.
+   */
+  isJobProcess(pid, startedAt) {
+    if (!pid || !this.platform.isAlive(pid)) return false;
+    const started = this.platform.processStartTime ? this.platform.processStartTime(pid) : null;
+    const expected = Date.parse(startedAt);
+    if (started === null || !Number.isFinite(expected)) return true;
+    return Math.abs(started - expected) <= START_SLACK_MS;
+  }
+
   /** Re-adopts processes from a previous agent run, then starts enabled jobs. */
   boot({ autorun = true } = {}) {
-    const saved = this.store.loadRunState();
+    const raw = this.store.loadRunState();
+    // Older state.json files are just { id: { pid, startedAt } } with no boot time.
+    const saved = raw.bootTime === undefined ? raw
+      : Math.abs(raw.bootTime - bootTime()) <= BOOT_SLACK_MS ? raw.jobs || {} : {};
     for (const job of this.store.jobs) {
       const s = saved[job.id];
-      if (s?.pid && this.platform.isAlive(s.pid)) {
+      if (s?.pid && this.isJobProcess(s.pid, s.startedAt)) {
         const r = this.rec(job.id);
         Object.assign(r, { status: 'running', pid: s.pid, startedAt: s.startedAt || null, adopted: true });
         try { r.outOffset = fs.statSync(this.logs.outFile(job.id)).size; } catch { r.outOffset = 0; }
@@ -97,7 +117,7 @@ export class Runner {
     try {
       if (fs.statSync(outFile).size > MAX_OUT_BYTES) fs.renameSync(outFile, `${outFile}.old`);
     } catch { /* new file */ }
-    const fd = fs.openSync(outFile, 'a');
+    const fd = fs.openSync(outFile, 'a', 0o600);
     r.outOffset = fs.fstatSync(fd).size;
     r.carry = Buffer.alloc(0);
 
@@ -185,8 +205,9 @@ export class Runner {
       r.stopping = true;
       this.platform.killTree(r.pid);
     } else {
-      // Adopted from a previous agent run: there is no exit event to wait for.
-      this.platform.killTree(r.pid);
+      // Adopted from a previous agent run: there is no exit event to wait for. The pid may
+      // belong to another program by now, which must not be killed.
+      if (this.isJobProcess(r.pid, r.startedAt)) this.platform.killTree(r.pid);
       Object.assign(r, { status: 'stopped', pid: null, adopted: false });
       this.logs.sys(id, 'stopped');
       this.persist();
@@ -245,11 +266,11 @@ export class Runner {
   }
 
   persist() {
-    const state = {};
+    const jobs = {};
     for (const [id, r] of this.recs) {
-      if (r.status === 'running' && r.pid) state[id] = { pid: r.pid, startedAt: r.startedAt };
+      if (r.status === 'running' && r.pid) jobs[id] = { pid: r.pid, startedAt: r.startedAt };
     }
-    try { this.store.saveRunState(state); } catch { /* best effort */ }
+    try { this.store.saveRunState({ bootTime: bootTime(), jobs }); } catch { /* best effort */ }
   }
 
   shutdown() {

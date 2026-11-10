@@ -71,9 +71,11 @@ function esc(s) {
 }
 
 async function api(method, url, body, timeoutMs = 5000) {
+  const headers = { 'X-Docket-Jobs': '1' };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
   const res = await fetch(url, {
     method,
-    headers: body === undefined ? { 'X-Docket-Jobs': '1' } : { 'Content-Type': 'application/json', 'X-Docket-Jobs': '1' },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
     // Without a timeout a hung connection would leave the page showing "Active" forever.
     signal: AbortSignal.timeout(timeoutMs),

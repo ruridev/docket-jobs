@@ -13,7 +13,7 @@ export class LogStore {
     this.dir = dir;
     this.keep = keep;
     this.buffers = new Map();
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
 
   file(id) {
@@ -47,7 +47,7 @@ export class LogStore {
     try {
       if (fs.statSync(file).size > MAX_FILE_BYTES) fs.renameSync(file, `${file}.old`);
     } catch { /* first write */ }
-    fs.appendFileSync(file, JSON.stringify(e) + '\n');
+    fs.appendFileSync(file, JSON.stringify(e) + '\n', { mode: 0o600 });
     return e;
   }
 

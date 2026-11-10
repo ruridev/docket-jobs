@@ -16,11 +16,19 @@ export function readJson(file, fallback) {
 }
 
 export function writeJsonAtomic(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n');
+  // Owner-only: the files hold commands to run and paths to restore.
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode: 0o600 });
   fs.renameSync(tmp, file);
 }
+
+/** Creates the data folder readable by this user only, and tightens an existing one. */
+export function ensurePrivateDir(dir) {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  try { fs.chmodSync(dir, 0o700); } catch { /* not supported (Windows) */ }
+}
+
 
 /**
  * Validates job input from the API. `base` is the existing job when editing.
@@ -64,7 +72,7 @@ export class Store {
   constructor(dataDir) {
     this.jobsFile = path.join(dataDir, 'jobs.json');
     this.stateFile = path.join(dataDir, 'state.json');
-    fs.mkdirSync(dataDir, { recursive: true });
+    ensurePrivateDir(dataDir);
 
     const raw = readJson(this.jobsFile, { jobs: [] });
     this.jobs = (Array.isArray(raw.jobs) ? raw.jobs : [])

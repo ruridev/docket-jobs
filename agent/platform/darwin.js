@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn, execFile } from 'node:child_process';
+import { spawn, spawnSync, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const run = promisify(execFile);
@@ -87,6 +87,13 @@ export function isAlive(pid) {
   }
 }
 
+/** When the process started (ms), or null if unknown. Tells a reused pid apart from our job. */
+export function processStartTime(pid) {
+  const res = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' } });
+  const t = Date.parse((res.stdout || '').trim());
+  return Number.isFinite(t) ? t : null;
+}
+
 /* ---------- other programs' startup items ---------- */
 
 const USER_AGENTS = path.join(os.homedir(), 'Library', 'LaunchAgents');
@@ -131,6 +138,10 @@ async function disabledLabels() {
 // takes an administrator password. (LaunchDaemons are left out on purpose: they run as
 // root before login, which docket-jobs, running as the user, can't stand in for.)
 const SYSTEM_AGENTS = process.env.DOCKET_JOBS_SYSTEM_AGENTS_DIR || '/Library/LaunchAgents';
+// Backups of /Library agents go to a root-owned folder, created by the same admin command, so
+// that no process of this user can swap the file that root later moves back into /Library.
+const SYSTEM_BACKUP_DIR = process.env.DOCKET_JOBS_SYSTEM_BACKUP_DIR || '/Library/Application Support/docket-jobs/startup-backup';
+const PLIST_NAME = /^[\w.@-]+\.plist$/;
 
 /** Turns a LaunchAgent plist (as JSON) into a startup item, or null if it doesn't start at login. */
 export function agentToItem(p, full, { system = false } = {}) {
@@ -189,12 +200,43 @@ async function runAsAdmin(shellCommand) {
   }
 }
 
-/** Moves a plist away (or back) so it stops (or starts) loading at the next login. */
-async function movePlist(from, to, admin) {
-  if (fs.existsSync(to)) throw new Error('A file with the same name is already there');
-  fs.mkdirSync(path.dirname(to), { recursive: true });
-  if (admin) await runAsAdmin(`/bin/mv -n ${shq(from)} ${shq(to)}`);
-  else fs.renameSync(from, to);
+// Names that go into a root shell command are held to PLIST_NAME; the user's own agents only
+// need to be a plist file name.
+function plistName(file, admin = true) {
+  const name = path.basename(String(file));
+  if (!(admin ? PLIST_NAME : /\.plist$/).test(name)) throw new Error(`unexpected plist name: ${name}`);
+  return name;
+}
+
+/** The user-level backup folder; refused if it is a symlink (it could point anywhere). */
+function userBackupDir(backupDir) {
+  try {
+    if (fs.lstatSync(backupDir).isSymbolicLink()) throw new Error('startup-backup is a symlink');
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+  return backupDir;
+}
+
+/**
+ * Where undo moves an agent plist from and to. imports.json lives in the user's data folder, so
+ * nothing in it may steer a move made as root: both paths are rebuilt from fixed folders and the
+ * file names, which must match the record's key.
+ */
+export function agentRestorePaths(backup, key, backupDir) {
+  const admin = Boolean(backup.admin);
+  const name = plistName(backup.from, admin);
+  if (key !== `${admin ? 'sysagent' : 'agent'}:${name}`) throw new Error('backup does not match its item');
+  const saved = plistName(backup.to, admin);
+  if (saved !== name && !(saved.endsWith(`-${name}`) && /^\d+$/.test(saved.slice(0, -name.length - 1)))) {
+    throw new Error('backup does not match its item');
+  }
+  if (!admin) return { from: path.join(userBackupDir(backupDir), saved), to: path.join(USER_AGENTS, name), admin };
+  const to = path.join(SYSTEM_AGENTS, name);
+  // Root installs this file, so it must come from the root-owned folder, never from data/.
+  if (path.dirname(String(backup.to)) !== SYSTEM_BACKUP_DIR) throw new Error('backup is not in the root-owned backup folder');
+  return { from: path.join(SYSTEM_BACKUP_DIR, saved), to, admin };
 }
 
 function backupPath(backupDir, file) {
@@ -330,9 +372,22 @@ export async function disableStartupItem(item, backupDir) {
     return { kind: 'login', name: item.data.name, path: item.data.path, hidden: !!item.data.hidden };
   }
   if (item.source === 'agent' || item.source === 'sysagent') {
-    const dest = backupPath(backupDir, item.data.file);
-    await movePlist(item.data.file, dest, item.data.admin);
-    return { kind: 'agent', from: item.data.file, to: dest, admin: Boolean(item.data.admin) };
+    const admin = item.source === 'sysagent';
+    const name = plistName(item.data.file, admin);
+    const from = path.join(admin ? SYSTEM_AGENTS : USER_AGENTS, name);
+    // Re-checked against the folder itself, not just the item handed in.
+    if (item.key !== `${item.source}:${name}` || item.data.file !== from || (admin && !fs.lstatSync(from).isFile())) {
+      throw new Error('startup item is no longer there');
+    }
+    if (!admin) {
+      const dest = backupPath(userBackupDir(backupDir), name);
+      fs.renameSync(from, dest);
+      return { kind: 'agent', from, to: dest, admin };
+    }
+    const dest = backupPath(SYSTEM_BACKUP_DIR, name);
+    const dir = shq(SYSTEM_BACKUP_DIR);
+    await runAsAdmin(`/bin/mkdir -p ${dir} && /bin/chmod 755 ${dir} && [ ! -e ${shq(dest)} ] && /bin/mv -n ${shq(from)} ${shq(dest)}`);
+    return { kind: 'agent', from, to: dest, admin };
   }
   if (item.source === 'appagent') {
     // docket-jobs can't switch it off; the user does that in System Settings first.
@@ -344,14 +399,23 @@ export async function disableStartupItem(item, backupDir) {
   throw new Error(`unknown source ${item.source}`);
 }
 
-export async function restoreStartupItem(backup) {
+/** `key` and `backupDir` check where an agent plist may be restored from (see agentRestorePaths). */
+export async function restoreStartupItem(backup, key, backupDir) {
   if (backup.kind === 'login') {
     await jxa('function run(a){const se=Application("System Events");se.loginItems.push(se.LoginItem({path:a[0],hidden:a[1]==="1"}))}',
       [backup.path, backup.hidden ? '1' : '0']);
     return;
   }
   if (backup.kind === 'agent') {
-    await movePlist(backup.to, backup.from, Boolean(backup.admin));
+    const { from, to, admin } = agentRestorePaths(backup, key, backupDir);
+    if (fs.existsSync(to)) throw new Error('A file with the same name is already there');
+    if (!admin) {
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      fs.renameSync(from, to);
+      return;
+    }
+    const dest = shq(to);
+    await runAsAdmin(`[ ! -e ${dest} ] && /bin/mv -n ${shq(from)} ${dest} && /usr/sbin/chown -h root:wheel ${dest} && /bin/chmod -h 644 ${dest}`);
     return;
   }
   if (backup.kind === 'manual') {

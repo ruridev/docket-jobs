@@ -252,3 +252,17 @@ test('launchd overrides are read in both old and new formats', async () => {
   assert.deepEqual([...on].sort(), ['J8RPQ294UB.com.skitch.SkitchHelper', 'com.old.on']);
   assert.deepEqual([...off].sort(), ['com.old.off', 'com.vendor.off']);
 });
+
+test('psQuote doubles every quote PowerShell reads as a single quote', async () => {
+  const { psQuote, psString } = await import('../agent/platform/win32.js');
+  assert.equal(psQuote("a'b"), "'a''b'");
+  assert.equal(psQuote('a‘b’c‚d‛e'), "'a‘‘b’’c‚‚d‛‛e'");
+  assert.equal(psQuote('’; calc; ’'), "'’’; calc; ’’'");
+
+  // psString hands PowerShell base64 only, whatever the name holds.
+  const evil = "x’); Start-Process calc; ('";
+  const expr = psString(evil);
+  const b64 = /FromBase64String\('([A-Za-z0-9+/=]*)'\)/.exec(expr)[1];
+  assert.equal(Buffer.from(b64, 'base64').toString('utf8'), evil);
+  assert.equal(expr, `([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${b64}')))`);
+});

@@ -40,6 +40,7 @@ It works on Windows and macOS.
 | --- | --- | --- |
 | `DOCKET_JOBS_PORT` | `8765` | Port to listen on |
 | `DOCKET_JOBS_DATA_DIR` | `./data` | Where jobs, state and logs are stored |
+| `DOCKET_FRAME_ANCESTORS` | `'self' http://localhost:4600 http://127.0.0.1:4600` | Pages allowed to embed the UI (CSP `frame-ancestors`); the default is the docket portal |
 
 To update, stop the agent, run `git pull` and start it again, or log in again if autostart is on. Your jobs are in `data/`, which git does not track. If you move this folder or reinstall Node, run `autostart:off` and `autostart:on` again.
 
@@ -65,7 +66,7 @@ login
 
 ### Importing startup items
 
-Importing turns the original entry off (or moves it to `data/startup-backup/`), and docket-jobs runs it as a job from the next login. **Undo** puts the original entry back.
+Importing turns the original entry off (or moves it to `data/startup-backup/`; for `/Library/LaunchAgents`, to the root-owned `/Library/Application Support/docket-jobs/startup-backup/`), and docket-jobs runs it as a job from the next login. **Undo** puts the original entry back.
 
 | | Windows | macOS |
 | --- | --- | --- |
@@ -83,7 +84,9 @@ Importing turns the original entry off (or moves it to `data/startup-backup/`), 
 | `data/state.json` | PIDs of running jobs |
 | `data/logs/<id>.jsonl` | Log per job (agent messages and program output) |
 | `data/logs/<id>.out.log` | Raw program output |
-| `data/imports.json`, `data/startup-backup/` | Imported startup items and the originals for undo |
+| `data/imports.json`, `data/startup-backup/` | Imported startup items and the originals for undo (`/Library/LaunchAgents` originals are in `/Library/Application Support/docket-jobs/startup-backup/`) |
+
+`data/` and the files in it are readable by your user only.
 
 Theme and language are saved in the browser only.
 
@@ -91,7 +94,10 @@ Theme and language are saved in the browser only.
 
 - **Jobs run their command with your user's permissions.** Do not add a command you do not trust.
 - **Importing changes your OS startup items.** You can undo it from the UI as long as `data/` is kept.
-- The UI and the API listen on `127.0.0.1` only. Because the API can run any command, it checks the `Host` header, the `Origin` header and a custom `X-Docket-Jobs` header to reject requests from other web pages.
+- The UI and the API listen on `127.0.0.1` only. Because the API can run any command, the server checks the `Host` header, the `Origin` header and a custom `X-Docket-Jobs` header to reject requests from other web pages.
+- The API has no password or token: any program on this PC that can reach `127.0.0.1` (a container, for example) can use it. Don't run docket-jobs on a PC you share with other people.
+- Only the docket portal (`http://localhost:4600`) may embed the UI in a frame. Change this with `DOCKET_FRAME_ANCESTORS`.
+- Undoing an import never takes a path from `data/imports.json` for an admin command: `/Library/LaunchAgents` items are restored only from the root-owned backup folder, by file name.
 
 ## Troubleshooting
 
