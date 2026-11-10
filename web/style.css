@@ -49,9 +49,10 @@ button { cursor: pointer; }
 @media (max-width: 480px) { .wrap { padding-left: 16px; padding-right: 16px; } }
 
 /* Top bar */
-.topbar { background: var(--surface); border-bottom: 1px solid var(--line); }
-.topbar-inner { display: flex; align-items: center; gap: 12px; padding-top: 8px; padding-bottom: 8px; padding-right: 12px; }
-.brand { flex: 1; font-size: 18px; font-weight: 700; color: var(--ink); text-decoration: none; }
+.topbar { height: 48px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.topbar-inner { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 8px 0 14px; }
+.topbar .icon-btn { width: 32px; height: 32px; border-radius: 6px; }
+.brand { flex: 1; font-size: 18px; font-weight: 600; color: var(--ink); text-decoration: none; }
 /* Green "Active" normally; orange with a message when the agent can't be reached. */
 .agent-status { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; font-size: 13px; font-weight: 600; color: var(--running); }
 .agent-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
