@@ -7,10 +7,11 @@ if (!autostartSupported) {
   console.error(`Autostart is not supported on ${process.platform}.`);
   process.exit(1);
 }
+platform.syncAutostart();
 if (cmd === 'on') platform.enableAutostart();
 else if (cmd === 'off') platform.disableAutostart();
 else if (cmd !== 'status') {
   console.error('Usage: node scripts/autostart.js on|off|status');
   process.exit(1);
 }
-console.log(`Start b_jobs at login: ${platform.isAutostartEnabled() ? 'on' : 'off'}`);
+console.log(`Start docket-jobs at login: ${platform.isAutostartEnabled() ? 'on' : 'off'}`);

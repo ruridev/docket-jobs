@@ -2,7 +2,7 @@
 // The theme is kept in this browser only (like docket); none = follow the OS light/dark setting.
 (function () {
   var THEMES = ['light', 'dark', 'green', 'g6'];
-  var KEY = 'bjobs-theme';
+  var KEY = 'docket-jobs-theme';
 
   function apply(t) {
     var root = document.documentElement;
@@ -23,7 +23,15 @@
   }
 
   var saved = '';
-  try { saved = localStorage.getItem(KEY) || ''; } catch (e) { /* ignore */ }
+  try {
+    // Carry over a theme saved before the rename from b_jobs.
+    var old = localStorage.getItem('bjobs-theme');
+    if (old !== null) {
+      if (localStorage.getItem(KEY) === null) localStorage.setItem(KEY, old);
+      localStorage.removeItem('bjobs-theme');
+    }
+    saved = localStorage.getItem(KEY) || '';
+  } catch (e) { /* ignore */ }
   apply(saved);
-  window.bjobsTheme = { THEMES: THEMES, apply: apply };
+  window.docketJobsTheme = { THEMES: THEMES, apply: apply };
 })();

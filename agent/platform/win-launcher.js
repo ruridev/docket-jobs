@@ -6,16 +6,16 @@
 // gets its own (hidden) console, so the whole process tree writes to the log file.
 import { spawn } from 'node:child_process';
 
-const command = process.env.BJOBS_COMMAND;
-const hide = process.env.BJOBS_HIDE !== '0';
-delete process.env.BJOBS_COMMAND;
-delete process.env.BJOBS_HIDE;
+const command = process.env.DOCKET_JOBS_COMMAND;
+const hide = process.env.DOCKET_JOBS_HIDE !== '0';
+delete process.env.DOCKET_JOBS_COMMAND;
+delete process.env.DOCKET_JOBS_HIDE;
 
 if (!command) process.exit(2);
 
 const child = spawn(command, [], { shell: true, stdio: 'inherit', windowsHide: hide });
 child.on('error', (err) => {
-  console.error(`b_jobs: ${err.message}`);
+  console.error(`docket-jobs: ${err.message}`);
   process.exit(1);
 });
 child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)));

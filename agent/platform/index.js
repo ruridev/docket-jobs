@@ -6,6 +6,7 @@ const unsupported = {
   isAutostartEnabled: () => false,
   enableAutostart: () => { throw new Error(`Autostart is not supported on ${process.platform} yet`); },
   disableAutostart: () => {},
+  syncAutostart: () => false,
   scanStartup: async () => ({ items: [], notes: ['unsupported'] }),
 };
 

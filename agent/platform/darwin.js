@@ -12,8 +12,10 @@ export function spawnJob(command, { cwd, stdio }) {
   return spawn(command, [], { cwd, shell: true, detached: true, stdio, env: process.env });
 }
 
-const LABEL = process.env.BJOBS_AUTOSTART_NAME || 'com.ruridev.bjobs';
+const LABEL = process.env.DOCKET_JOBS_AUTOSTART_NAME || 'com.ruridev.docket-jobs';
 const PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', `${LABEL}.plist`);
+// Login entry written before the project was renamed from b_jobs.
+const LEGACY_PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', 'com.ruridev.bjobs.plist');
 
 function xml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -62,6 +64,22 @@ export function enableAutostart() {
 
 export function disableAutostart() {
   try { fs.unlinkSync(PLIST); } catch (err) { if (err.code !== 'ENOENT') throw err; }
+}
+
+/**
+ * Keeps the login entry pointing at this copy of the agent: replaces a plist left under the old
+ * b_jobs label, and rewrites one whose path is stale (the folder was moved).
+ * Returns true if anything changed. With a custom label (tests), real entries are left alone.
+ */
+export function syncAutostart() {
+  if (process.env.DOCKET_JOBS_AUTOSTART_NAME) return false;
+  const legacy = fs.existsSync(LEGACY_PLIST);
+  let current = null;
+  try { current = fs.readFileSync(PLIST, 'utf8'); } catch { /* not enabled */ }
+  if (!legacy && (current === null || current.includes(xml(AGENT_ENTRY)))) return false;
+  enableAutostart();
+  if (legacy) fs.rmSync(LEGACY_PLIST, { force: true });
+  return true;
 }
 
 export function isAlive(pid) {
@@ -115,14 +133,14 @@ async function disabledLabels() {
 
 // LaunchAgents for every user. Readable by anyone, but owned by root, so turning one off
 // takes an administrator password. (LaunchDaemons are left out on purpose: they run as
-// root before login, which b_jobs, running as the user, can't stand in for.)
-const SYSTEM_AGENTS = process.env.BJOBS_SYSTEM_AGENTS_DIR || '/Library/LaunchAgents';
+// root before login, which docket-jobs, running as the user, can't stand in for.)
+const SYSTEM_AGENTS = process.env.DOCKET_JOBS_SYSTEM_AGENTS_DIR || '/Library/LaunchAgents';
 
 /** Turns a LaunchAgent plist (as JSON) into a startup item, or null if it doesn't start at login. */
 export function agentToItem(p, full, { system = false } = {}) {
   if (!p || p.Disabled || !(p.RunAtLoad || p.KeepAlive)) return null;
   const argv = Array.isArray(p.ProgramArguments) && p.ProgramArguments.length ? p.ProgramArguments : p.Program ? [p.Program] : null;
-  if (!argv || argv.includes(AGENT_ENTRY)) return null; // b_jobs itself
+  if (!argv || argv.includes(AGENT_ENTRY)) return null; // docket-jobs itself
   const file = path.basename(full);
   return {
     key: `${system ? 'sysagent' : 'agent'}:${file}`, name: p.Label || path.parse(file).name,
@@ -139,7 +157,7 @@ async function scanAgentDir(dir, off, opts) {
   try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.plist')); } catch { return items; }
   for (const file of files) {
     const full = path.join(dir, file);
-    if (full === PLIST) continue;
+    if (full === PLIST || full === LEGACY_PLIST) continue;
     let p;
     try { p = JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', full])).stdout); } catch { continue; }
     if (off.has(p.Label)) continue;
@@ -200,7 +218,7 @@ async function scanLoginItems() {
 
 /* Agents that apps keep inside their bundle and register with SMAppService. Their on/off
  * switch lives in macOS's background-items database (root only), and Apple lets only the
- * user change it in System Settings. b_jobs can list them and take over once the user has
+ * user change it in System Settings. docket-jobs can list them and take over once the user has
  * switched them off there ("manual" items). */
 
 const APP_DIRS = ['/Applications', path.join(os.homedir(), 'Applications')];
@@ -297,7 +315,7 @@ export async function openStartupSettings() {
 }
 
 /**
- * What b_jobs can read: "Open at Login" apps (via System Events), the user's LaunchAgents,
+ * What docket-jobs can read: "Open at Login" apps (via System Events), the user's LaunchAgents,
  * /Library/LaunchAgents (admin password to change) and agents inside apps (switched off by
  * the user in System Settings). LaunchDaemons are left out on purpose.
  * `all` also returns app agents that are switched off, so an import can find the item
@@ -321,7 +339,7 @@ export async function disableStartupItem(item, backupDir) {
     return { kind: 'agent', from: item.data.file, to: dest, admin: Boolean(item.data.admin) };
   }
   if (item.source === 'appagent') {
-    // b_jobs can't switch it off; the user does that in System Settings first.
+    // docket-jobs can't switch it off; the user does that in System Settings first.
     if ((await loadedLabels()).has(item.data.label)) {
       throw Object.assign(new Error('still_enabled'), { code: 'still_enabled' });
     }

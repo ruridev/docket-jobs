@@ -55,9 +55,18 @@ async function startupAction(kind, key) {
 
 const $ = (sel) => document.querySelector(sel);
 // Display language and theme are kept in this browser only (like docket).
-const LANG_KEY = 'bjobs-lang';
+const LANG_KEY = 'docket-jobs-lang';
 function savedLang() {
-  try { const l = localStorage.getItem(LANG_KEY); return I18N[l] ? l : null; } catch { return null; }
+  try {
+    // Carry over a choice saved before the rename from b_jobs.
+    const old = localStorage.getItem('bjobs-lang');
+    if (old !== null) {
+      if (localStorage.getItem(LANG_KEY) === null) localStorage.setItem(LANG_KEY, old);
+      localStorage.removeItem('bjobs-lang');
+    }
+    const l = localStorage.getItem(LANG_KEY);
+    return I18N[l] ? l : null;
+  } catch { return null; }
 }
 let chosenLang = savedLang();
 const lang = () => chosenLang || detectLang();
@@ -70,7 +79,7 @@ function esc(s) {
 async function api(method, url, body, timeoutMs = 5000) {
   const res = await fetch(url, {
     method,
-    headers: body === undefined ? { 'X-BJobs': '1' } : { 'Content-Type': 'application/json', 'X-BJobs': '1' },
+    headers: body === undefined ? { 'X-Docket-Jobs': '1' } : { 'Content-Type': 'application/json', 'X-Docket-Jobs': '1' },
     body: body === undefined ? undefined : JSON.stringify(body),
     // Without a timeout a hung connection would leave the page showing "Active" forever.
     signal: AbortSignal.timeout(timeoutMs),
@@ -158,7 +167,7 @@ function renderImport() {
       <div class="row-name">${esc(name)}</div>
       ${hints.length ? `<div class="row-sub">${esc(hints.join(' · '))}</div>` : ''}
     </div>`;
-  // macOS app agents: the user switches them off in System Settings, then b_jobs takes over.
+  // macOS app agents: the user switches them off in System Settings, then docket-jobs takes over.
   const manualSteps = (i) => `<div class="manual-steps">
       <p class="note">${esc(T.manualSteps(i.name))}</p>
       <div class="manual-actions">
@@ -272,13 +281,14 @@ function renderSettings() {
     </div>`;
 }
 
-const THEME_SAMPLE = { light: 'b_jobs', dark: 'b_jobs', green: 'B_JOBS', g6: '[b_jobs]' };
+const THEME_SAMPLE = { light: 'docket-jobs', dark: 'docket-jobs', green: 'DOCKET-JOBS', g6: '[docket-jobs]' };
 
 function themeCards() {
   const T = t();
   const current = document.documentElement.dataset.theme || '';
-  const part = (k) => `<span class="tp-part tp-${k}"><span class="tp-bar">${THEME_SAMPLE[k]}</span><span class="tp-body"><span class="tp-ln"><span class="tp-cd"></span><span class="tp-cd"></span></span><span class="tp-pn"><span class="tp-t1"></span><span class="tp-t2"></span><span class="tp-bt"></span></span></span></span>`;
-  return [['', ['light', 'dark']], ...window.bjobsTheme.THEMES.map((k) => [k, [k]])].map(([id, parts]) =>
+  // The system card is split in two halves, too narrow for the full name.
+  const part = (k, _, all) => `<span class="tp-part tp-${k}"><span class="tp-bar">${all.length > 1 ? 'docket' : THEME_SAMPLE[k]}</span><span class="tp-body"><span class="tp-ln"><span class="tp-cd"></span><span class="tp-cd"></span></span><span class="tp-pn"><span class="tp-t1"></span><span class="tp-t2"></span><span class="tp-bt"></span></span></span></span>`;
+  return [['', ['light', 'dark']], ...window.docketJobsTheme.THEMES.map((k) => [k, [k]])].map(([id, parts]) =>
     `<button class="theme-card" role="radio" aria-checked="${current === id}" data-action="theme" data-id="${id}">
       <span class="tp" aria-hidden="true">${parts.map(part).join('')}</span>
       <span class="tname">${esc(T.themeNames[id || 'auto'])}</span>
@@ -422,7 +432,7 @@ const actions = {
     chosenLang = code;
     try { localStorage.setItem(LANG_KEY, code); } catch { /* still applies for this page */ }
   },
-  theme: (id = '') => window.bjobsTheme.apply(id),
+  theme: (id = '') => window.docketJobsTheme.apply(id),
   autostart: async () => {
     try {
       const d = await api('PUT', '/api/settings', { autoStart: !state.settings.autoStart });

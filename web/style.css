@@ -10,7 +10,7 @@
 :root[data-theme="g6"] { --bg: #e2e2e0; --panel: #f1f1ef; --lane: #e9e9e7; --border: #8a8a88; --text: #1b1b1b; --muted: #4f4f4f; --accent: #1b1b1b; --accent-text: #ffffff; --ok: #1d7a2c; --warn: #8a5f00; --danger: #d6262a; --orange: #b04800; --merged: #6a3db3; --chip: #d9d9d7; color-scheme: light; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme]) { --bg: #0d1117; --panel: #161b22; --lane: #10151c; --border: #30363d; --text: #e6edf3; --muted: #8d96a0; --accent: #2f81f7; --accent-text: #ffffff; --ok: #3fb950; --warn: #d29922; --danger: #f85149; --orange: #db6d28; --merged: #a371f7; --chip: #21262d; color-scheme: dark; } }
 
-/* b_jobs names, mapped onto the theme palette. */
+/* docket-jobs names, mapped onto the theme palette. */
 :root {
   --surface: var(--panel);
   --surface-2: var(--lane);

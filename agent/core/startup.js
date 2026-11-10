@@ -2,7 +2,7 @@ import path from 'node:path';
 import { readJson, writeJsonAtomic } from './store.js';
 
 /**
- * Takes other programs' startup items over into b_jobs, and puts them back on undo.
+ * Takes other programs' startup items over into docket-jobs, and puts them back on undo.
  * Each import is recorded with what is needed to restore the original entry.
  */
 export class StartupImporter {

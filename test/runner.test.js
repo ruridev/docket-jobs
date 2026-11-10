@@ -11,7 +11,7 @@ import { platform } from '../agent/platform/index.js';
 const NODE = `"${process.execPath}"`;
 
 function setup() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bjobs-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'docket-jobs-test-'));
   const store = new Store(dir);
   const logs = new LogStore(path.join(dir, 'logs'));
   const runner = new Runner({ store, logs, platform, restartDelayMs: 100, pollMs: 50 });
@@ -105,7 +105,7 @@ test('boot waits for the start delay', async () => {
 
 test('a missing working folder fails without spawning', () => {
   const { store, logs, runner } = setup();
-  const { job } = store.addJob({ name: 'nowhere', command: 'echo hi', cwd: path.join(os.tmpdir(), 'no-such-dir-bjobs') });
+  const { job } = store.addJob({ name: 'nowhere', command: 'echo hi', cwd: path.join(os.tmpdir(), 'no-such-dir-docket-jobs') });
   assert.equal(runner.start(job).error, 'cwd_missing');
   assert.equal(runner.status(job.id).status, 'failed');
   assert.ok(logs.tail(job.id).some((e) => e.k === 'cwdMissing'));

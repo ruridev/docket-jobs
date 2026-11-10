@@ -10,7 +10,7 @@ import { createServer } from '../agent/core/server.js';
 import { platform } from '../agent/platform/index.js';
 import { WEB_DIR } from '../agent/paths.js';
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bjobs-srv-'));
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'docket-jobs-srv-'));
 const store = new Store(dir);
 const logs = new LogStore(path.join(dir, 'logs'));
 const runner = new Runner({ store, logs, platform });
@@ -21,15 +21,15 @@ await new Promise((r) => server.listen(port, '127.0.0.1', r));
 after(() => { runner.shutdown(); server.close(); });
 
 const base = `http://127.0.0.1:${port}`;
-const json = { 'Content-Type': 'application/json', 'X-BJobs': '1' };
+const json = { 'Content-Type': 'application/json', 'X-Docket-Jobs': '1' };
 
 test('serves the UI', async () => {
   const res = await fetch(`${base}/`);
   assert.equal(res.status, 200);
-  assert.match(await res.text(), /<title>b_jobs<\/title>/);
+  assert.match(await res.text(), /<title>docket-jobs<\/title>/);
 });
 
-test('rejects changes without the X-BJobs header', async () => {
+test('rejects changes without the X-Docket-Jobs header', async () => {
   const res = await fetch(`${base}/api/jobs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"name":"a","command":"b"}' });
   assert.equal(res.status, 403);
   assert.equal(store.jobs.length, 0);

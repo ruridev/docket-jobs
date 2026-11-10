@@ -42,7 +42,7 @@ function readBody(req, limit = 64 * 1024) {
  * other web pages must never get through:
  *  - only listens on 127.0.0.1
  *  - Host must be 127.0.0.1/localhost (blocks DNS rebinding)
- *  - changes need the X-BJobs header, which a cross-site page cannot send without a CORS
+ *  - changes need the X-Docket-Jobs header, which a cross-site page cannot send without a CORS
  *    preflight that this server never approves, and a matching Origin when one is sent
  */
 export function createServer({ store, runner, logs, platform, autostartSupported, port, webDir, importer = null }) {
@@ -51,7 +51,7 @@ export function createServer({ store, runner, logs, platform, autostartSupported
 
   const jobView = (job) => ({ ...job, ...runner.status(job.id) });
   // Display language and theme are kept in the browser; the only server-side setting is
-  // whether the OS starts b_jobs at login.
+  // whether the OS starts docket-jobs at login.
   const settingsView = () => ({
     autoStart: autostartSupported ? platform.isAutostartEnabled() : false,
     autoStartSupported: autostartSupported,
@@ -163,7 +163,7 @@ export function createServer({ store, runner, logs, platform, autostartSupported
       if (url.pathname.startsWith('/api/')) {
         if (req.method !== 'GET') {
           const origin = req.headers.origin;
-          if (req.headers['x-bjobs'] !== '1' || (origin && !allowedOrigins.has(origin))) {
+          if (req.headers['x-docket-jobs'] !== '1' || (origin && !allowedOrigins.has(origin))) {
             return send(res, 403, { error: 'forbidden' });
           }
         }

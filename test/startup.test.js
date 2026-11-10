@@ -27,7 +27,7 @@ function fakePlatform() {
 }
 
 function setup() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bjobs-startup-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'docket-jobs-startup-'));
   const store = new Store(dir);
   const logs = new LogStore(path.join(dir, 'logs'));
   const fake = fakePlatform();
@@ -95,7 +95,7 @@ test('a logon task becomes a job with its command, folder and delay', () => {
   assert.deepEqual(item.data, { path: '\\', name: 'Local_AI_llama_cpp', admin: false });
 });
 
-test('tasks b_jobs cannot run, or b_jobs itself, are left out', () => {
+test('tasks docket-jobs cannot run, or docket-jobs itself, are left out', () => {
   assert.equal(taskToItem({ path: '\\', name: 'com', actions: [{ exe: '' }] }), null);
   assert.equal(taskToItem({ path: '\\', name: 'none', actions: [] }), null);
   assert.equal(taskToItem({ path: '\\', name: 'self', actions: [{ exe: 'node.exe', args: `"${AGENT_ENTRY}"` }] }), null);

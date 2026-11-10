@@ -10,7 +10,15 @@ import { platform, autostartSupported } from './platform/index.js';
 const args = process.argv.slice(2);
 const autorun = !args.includes('--no-autorun');
 const portArg = args.find((a) => a.startsWith('--port='));
-const port = portArg ? Number(portArg.split('=')[1]) : Number(process.env.BJOBS_PORT) || DEFAULT_PORT;
+const port = portArg ? Number(portArg.split('=')[1]) : Number(process.env.DOCKET_JOBS_PORT) || DEFAULT_PORT;
+
+if (autostartSupported) {
+  try {
+    if (platform.syncAutostart()) console.log('docket-jobs: updated the login entry to this copy of the agent');
+  } catch (err) {
+    console.error(`docket-jobs: could not update the login entry: ${err.message}`);
+  }
+}
 
 const store = new Store(DATA_DIR);
 const logs = new LogStore(LOG_DIR);
@@ -21,7 +29,7 @@ const server = createServer({ store, runner, logs, platform, autostartSupported,
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     // Another agent is already running (e.g. started at login); a second one must not start jobs again.
-    console.error(`b_jobs: port ${port} is already in use. Is the agent already running?`);
+    console.error(`docket-jobs: port ${port} is already in use. Is the agent already running?`);
     runner.shutdown();
     process.exit(0);
   }
@@ -29,7 +37,7 @@ server.on('error', (err) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
-  console.log(`b_jobs agent: http://127.0.0.1:${port}`);
+  console.log(`docket-jobs agent: http://127.0.0.1:${port}`);
   runner.boot({ autorun });
 });
 
