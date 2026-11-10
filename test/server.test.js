@@ -29,6 +29,13 @@ test('serves the UI', async () => {
   assert.match(await res.text(), /<title>docket-jobs<\/title>/);
 });
 
+test('lets only local pages frame the UI', async () => {
+  const res = await fetch(`${base}/`);
+  const fa = /frame-ancestors([^;]*)/.exec(res.headers.get('content-security-policy'))[1].trim();
+  assert.equal(fa, 'http://localhost:* http://127.0.0.1:*');
+  assert.equal(res.headers.get('x-frame-options'), null);
+});
+
 test('rejects changes without the X-Docket-Jobs header', async () => {
   const res = await fetch(`${base}/api/jobs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"name":"a","command":"b"}' });
   assert.equal(res.status, 403);

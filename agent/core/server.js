@@ -150,7 +150,7 @@ export function createServer({ store, runner, logs, platform, autostartSupported
         'Content-Type': MIME[path.extname(file)] || 'application/octet-stream',
         'Cache-Control': 'no-cache',
         'X-Content-Type-Options': 'nosniff',
-        'Content-Security-Policy': "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'",
+        'Content-Security-Policy': "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors http://localhost:* http://127.0.0.1:*",
       });
       res.end(data);
     });
