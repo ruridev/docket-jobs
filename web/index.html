@@ -27,6 +27,11 @@
   <form id="jobForm" method="dialog" novalidate>
     <h2 id="jobDialogTitle" class="dialog-title"></h2>
     <div class="dialog-body">
+      <div id="fromPort" class="from-port" hidden>
+        <button type="button" class="link-btn" data-action="scanPorts" aria-expanded="false" aria-controls="portList" data-i18n="fromPort"></button>
+        <div id="portList" class="port-list" hidden></div>
+        <p id="portNote" class="note" role="status" hidden></p>
+      </div>
       <div class="field">
         <label for="f-name" data-i18n="fName"></label>
         <input id="f-name" name="name" autocomplete="off" data-i18n-ph="fNamePh">

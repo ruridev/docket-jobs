@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import * as realPorts from './ports.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -45,7 +46,7 @@ function readBody(req, limit = 64 * 1024) {
  *  - changes need the X-Docket-Jobs header, which a cross-site page cannot send without a CORS
  *    preflight that this server never approves, and a matching Origin when one is sent
  */
-export function createServer({ store, runner, logs, platform, autostartSupported, port, webDir, importer = null }) {
+export function createServer({ store, runner, logs, platform, autostartSupported, port, webDir, importer = null, ports = realPorts }) {
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
 
@@ -120,6 +121,20 @@ export function createServer({ store, runner, logs, platform, autostartSupported
         if (['uac_cancelled', 'admin_failed', 'change_failed', 'still_enabled'].includes(err.code)) return send(res, 409, { error: err.code });
         return send(res, 500, { error: 'startup_failed', detail: String(err.message) });
       }
+    }
+
+    // Servers already running on this PC, to make a job from one of them.
+    if (parts[0] === 'ports' && method === 'GET') {
+      if (parts.length === 1) {
+        const jobPids = new Map();
+        for (const job of store.jobs) {
+          const { pid } = runner.status(job.id);
+          if (pid) jobPids.set(pid, job.name);
+        }
+        return send(res, 200, { servers: await ports.scanServers({ exclude: [port], jobPids }) });
+      }
+      const p = Number(parts[1]);
+      if (parts.length === 2 && Number.isInteger(p) && p > 0 && p < 65536) return send(res, 200, await ports.guessServer(p));
     }
 
     if (parts[0] === 'settings' && parts.length === 1 && method === 'PUT') {

@@ -156,6 +156,13 @@ dl { margin: 0; }
 .adv { display: flex; flex-direction: column; gap: 14px; }
 .adv-toggle svg { transition: transform .15s; }
 .adv-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.from-port { display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid var(--line-2); }
+.port-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
+.port-pick { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); text-align: left; font-size: 14px; }
+.port-pick:hover { background: var(--line-2); }
+.port-pick .port { font-weight: 600; flex: none; }
+.port-pick .ttl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.port-pick .sub2 { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--ink-3); }
 .check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 15px; }
 .check input { width: 18px; height: 18px; }
 .form-error { margin: 0; font-size: 14px; color: var(--failed); font-weight: 600; }

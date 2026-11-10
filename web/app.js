@@ -349,6 +349,7 @@ function openJobDialog(job) {
   f.restart.value = job?.restart || '0';
   f.hidden.checked = job ? job.hidden : true;
   setAdv(false);
+  resetPortPicker(!job);
   $('#jobFormError').hidden = true;
   $('#jobDialog').showModal();
   f.name.focus();
@@ -357,6 +358,83 @@ function openJobDialog(job) {
 function setAdv(open) {
   $('#advFields').hidden = !open;
   document.querySelector('[data-action="toggleAdv"]').setAttribute('aria-expanded', String(open));
+}
+
+/* Filling a new job from a server that is already running on this PC. */
+const ports = { servers: [], seq: 0, autoName: '' };
+// Reading the process table goes through PowerShell on Windows, which can take a few seconds.
+const PORTS_TIMEOUT_MS = 30000;
+
+function resetPortPicker(show) {
+  ports.seq++;
+  ports.servers = [];
+  ports.autoName = '';
+  $('#fromPort').hidden = !show;
+  setPortList(false);
+  portNote('');
+}
+
+function setPortList(open, html = '') {
+  const list = $('#portList');
+  list.hidden = !open;
+  list.innerHTML = html;
+  document.querySelector('[data-action="scanPorts"]').setAttribute('aria-expanded', String(open));
+}
+
+function portNote(text) {
+  const note = $('#portNote');
+  note.hidden = !text;
+  note.textContent = text;
+}
+
+async function scanPorts() {
+  const T = t();
+  if (!$('#portList').hidden) return setPortList(false);
+  const seq = ++ports.seq;
+  portNote('');
+  setPortList(true, `<p class="note">${esc(T.scanning)}</p>`);
+  let servers;
+  try {
+    servers = (await api('GET', '/api/ports', undefined, PORTS_TIMEOUT_MS)).servers;
+  } catch {
+    if (seq === ports.seq) setPortList(true, `<p class="note">${esc(T.scanError)}</p>`);
+    return;
+  }
+  if (seq !== ports.seq) return;
+  ports.servers = servers;
+  setPortList(true, servers.length
+    ? servers.map((d, i) => `<button type="button" class="port-pick" data-action="pickPort" data-id="${i}">
+        <span class="port mono">:${d.port}</span>
+        <span class="ttl">${esc(d.title || T.untitled)}</span>
+        <span class="sub2">${esc(d.job ? T.portJob(d.job) : d.proc)}</span>
+      </button>`).join('')
+    : `<p class="note">${esc(T.noPorts)}</p>`);
+}
+
+async function pickPort(i) {
+  const T = t();
+  const d = ports.servers[Number(i)];
+  if (!d) return;
+  const f = $('#jobForm');
+  const seq = ++ports.seq;
+  setPortList(false);
+  portNote(T.guessing(d.port));
+  let g;
+  try {
+    g = await api('GET', `/api/ports/${d.port}`, undefined, PORTS_TIMEOUT_MS);
+  } catch {
+    if (seq === ports.seq) portNote(T.scanError);
+    return;
+  }
+  if (seq !== ports.seq) return;
+  if (g.off) return portNote(T.guessOff(d.port));
+  // Fill the name only when it is empty or was filled in here before.
+  const name = d.title || (g.cwd ? g.cwd.split(/[\\/]/).filter(Boolean).pop() : '') || `:${d.port}`;
+  if (!f.name.value.trim() || f.name.value === ports.autoName) { f.name.value = name; ports.autoName = name; }
+  if (g.command) f.command.value = g.command;
+  if (g.cwd) { f.cwd.value = g.cwd; setAdv(true); }
+  const proc = g.proc || d.proc || '?';
+  portNote(g.cwd ? T.guessOk(d.port, proc) : T.guessNoCwd(d.port, proc));
 }
 
 async function saveJob(e) {
@@ -414,6 +492,8 @@ const actions = {
   edit: (id) => openJobDialog(state.jobs.find((j) => j.id === id)),
   delete: (id) => openDeleteDialog(id),
   toggleAdv: () => setAdv($('#advFields').hidden),
+  scanPorts: () => scanPorts(),
+  pickPort: (i) => pickPort(i),
   closeDialog: (_, e) => e.target.closest('dialog').close(),
   toggle: async (id) => {
     const job = state.jobs.find((j) => j.id === id);
@@ -460,7 +540,7 @@ document.addEventListener('click', async (e) => {
     /* the next refresh shows the real state */
   }
   render();
-  if (!['add', 'edit', 'delete', 'toggleAdv', 'closeDialog', 'menu', 'home', 'back', 'settings', 'open', 'import'].includes(name)) await refresh();
+  if (!['add', 'edit', 'delete', 'toggleAdv', 'scanPorts', 'pickPort', 'closeDialog', 'menu', 'home', 'back', 'settings', 'open', 'import'].includes(name)) await refresh();
   else if (name === 'open') await refresh();
 });
 
