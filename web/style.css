@@ -212,7 +212,7 @@ dl { margin: 0; }
 :root[data-theme="green"] body .topbar { background: var(--bg); }
 
 /* g6: pixel font, no rounding or shadows, [bracketed] text buttons, inverted bars. */
-:root[data-theme="g6"] body { font-family: "Fusion Pixel KO", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, ui-monospace, sans-serif; -webkit-font-smoothing: none; }
+:root[data-theme="g6"] body { font-family: "Fusion Pixel KO", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, ui-monospace, sans-serif; }
 :root[data-theme="g6"] body * { border-radius: 0 !important; box-shadow: none !important; font-weight: 400 !important; }
 :root[data-theme="g6"] body :is(button, input, select, .mono, .log) { font-family: inherit; }
 :root[data-theme="g6"] body .topbar { border-bottom: 2px solid var(--text); }
