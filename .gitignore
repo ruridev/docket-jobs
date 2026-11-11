@@ -4,8 +4,11 @@ logs/
 *.log
 .DS_Store
 Thumbs.db
-.env
+.env*
 settings.local.json
 .claude/
+CLAUDE.md
+AGENTS.md
+PLAN.md
 design/
 docs/

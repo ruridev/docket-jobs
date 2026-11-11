@@ -12,7 +12,7 @@ It works on Windows and macOS.
 
 ## Requirements
 
-- Node.js 20 or later
+- Node.js 22 or later
 
 ## Getting started
 
