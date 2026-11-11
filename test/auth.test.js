@@ -64,6 +64,14 @@ test('wrong passwords fail, then make you wait', async () => {
   assert.ok(locked.body.seconds >= 1);
 });
 
+test('parallel wrong passwords cannot get past the lock', async () => {
+  const { auth } = fresh();
+  await call(auth, '/api/auth/setup', { name: 'alice', password: 'long enough' });
+  const tries = await Promise.all(Array.from({ length: 20 }, () => call(auth, '/api/auth/login', { name: 'alice', password: 'wrong one' })));
+  assert.ok(tries.filter((r) => r.status === 401).length <= 5);
+  assert.ok(tries.filter((r) => r.status === 429).length >= 15);
+});
+
 test('logout clears the cookie; reset removes the account even for a running server', async () => {
   const { auth } = fresh();
   const ok = await call(auth, '/api/auth/setup', { name: 'alice', password: 'long enough' });

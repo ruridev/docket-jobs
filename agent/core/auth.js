@@ -43,6 +43,7 @@ export function createAuth({ file, cookie }) {
   let cached = null;
   let cachedAt = -1;
   let fails = 0;
+  let trying = false;
   let lockedUntil = 0;
 
   // Re-read when the file changes, so a reset from the command line applies to a running server.
@@ -105,9 +106,17 @@ export function createAuth({ file, cookie }) {
     if (!a) return { status: 409, body: { error: 'no_account' } };
     const wait = lockedUntil - Date.now();
     if (wait > 0) return { status: 429, body: { error: 'wait', seconds: Math.ceil(wait / 1000) } };
+    // One try at a time: tries sent in parallel would all pass the lock check before any of them fails.
+    if (trying) return { status: 429, body: { error: 'wait', seconds: 1 } };
     const name = String(body?.name ?? '').trim();
     const password = String(body?.password ?? '').slice(0, MAX_PASSWORD);
-    const hash = await scrypt(password, a.salt);
+    trying = true;
+    let hash;
+    try {
+      hash = await scrypt(password, a.salt);
+    } finally {
+      trying = false;
+    }
     // Check both, always, so a wrong name takes as long as a wrong password.
     const ok = [same(hash, a.hash), same(name, a.name)].every(Boolean);
     if (!ok) {
