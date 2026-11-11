@@ -8,14 +8,6 @@
     var root = document.documentElement;
     if (THEMES.indexOf(t) >= 0) root.dataset.theme = t;
     else delete root.dataset.theme;
-    // Only the green theme uses Google Fonts; load them the first time it is picked.
-    if (t === 'green' && !document.getElementById('theme-fonts')) {
-      var link = document.createElement('link');
-      link.id = 'theme-fonts';
-      link.rel = 'stylesheet';
-      link.href = 'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@200;300;500&family=IBM+Plex+Sans+KR:wght@400;600&family=Space+Mono&display=swap';
-      document.head.appendChild(link);
-    }
     try {
       if (THEMES.indexOf(t) >= 0) localStorage.setItem(KEY, t);
       else localStorage.removeItem(KEY);

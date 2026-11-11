@@ -13,12 +13,6 @@
   // Apply the app's saved theme before the first paint (this script is in <head>).
   var theme = stored(cfg.themeKey);
   if (THEMES.indexOf(theme) >= 0) root.dataset.theme = theme;
-  if (theme === 'green') {
-    var link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@200;300;500&family=IBM+Plex+Sans+KR:wght@400;600&family=Space+Mono&display=swap';
-    document.head.appendChild(link);
-  }
 
   var TEXT = {
     ko: {
