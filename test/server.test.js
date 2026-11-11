@@ -37,6 +37,11 @@ test('serves the UI when signed in, and the sign-in page when not', async () => 
   assert.match(await (await fetch(`${base}/`)).text(), /login\.js/);
 });
 
+test('a malformed path answers 400, not a server error', async () => {
+  assert.equal((await fetch(`${base}/%E0`)).status, 400);
+  assert.equal((await fetch(`${base}/a%00.js`)).status, 400);
+});
+
 test('signed out, the API answers 401; the account cannot be created twice', async () => {
   assert.equal((await fetch(`${base}/api/state`, { headers: { 'X-Docket-Jobs': '1' } })).status, 401);
   assert.equal((await fetch(`${base}/api/state`, { headers: { 'X-Docket-Jobs': '1', Cookie: 'docket_jobs_session=YWxpY2U.9999999999999.forged' } })).status, 401);

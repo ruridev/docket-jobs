@@ -123,7 +123,8 @@ export function createServer({ store, runner, logs, platform, autostartSupported
         if (err.status) throw err;
         // Known reasons the UI can explain; anything else is reported as a generic failure.
         if (['uac_cancelled', 'admin_failed', 'change_failed', 'still_enabled'].includes(err.code)) return send(res, 409, { error: err.code });
-        return send(res, 500, { error: 'startup_failed', detail: String(err.message) });
+        console.error(err);
+        return send(res, 500, { error: 'startup_failed' });
       }
     }
 
@@ -149,7 +150,8 @@ export function createServer({ store, runner, logs, platform, autostartSupported
           if (body.autoStart) platform.enableAutostart();
           else platform.disableAutostart();
         } catch (err) {
-          return send(res, 500, { error: 'autostart_failed', detail: String(err.message) });
+          console.error(err);
+          return send(res, 500, { error: 'autostart_failed' });
         }
       }
       return send(res, 200, { settings: settingsView() });
@@ -159,7 +161,13 @@ export function createServer({ store, runner, logs, platform, autostartSupported
   }
 
   function serveStatic(req, res, url) {
-    let rel = decodeURIComponent(url.pathname);
+    let rel;
+    try {
+      rel = decodeURIComponent(url.pathname);
+    } catch {
+      rel = '';
+    }
+    if (!rel || rel.includes('\0')) { res.writeHead(400); return res.end('Bad request'); }
     if (rel === '/') rel = '/index.html';
     // Signed out, the app page is the sign-in page (its files are public; the API is not).
     if (rel === '/index.html' && !auth.user(req)) rel = '/login.html';
@@ -194,7 +202,9 @@ export function createServer({ store, runner, logs, platform, autostartSupported
       if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
       return serveStatic(req, res, url);
     } catch (err) {
-      if (!res.headersSent) send(res, err.status || 500, { error: err.status ? 'bad_request' : 'internal', detail: String(err.message) });
+      // Details (paths, stack) stay in the server log.
+      if (!err.status) console.error(err);
+      if (!res.headersSent) send(res, err.status || 500, { error: err.status ? 'bad_request' : 'internal' });
     }
   });
 }
