@@ -51,6 +51,7 @@ server.listen(port, '127.0.0.1', () => {
   // Make the setup code before announcing the server, so it exists once the address is printed
   const code = !auth.hasAccount() && auth.setupCode();
   console.log(`docket-jobs agent: http://127.0.0.1:${port}`);
+  console.log(`Data: ${DATA_DIR}`);
   if (code) console.log(`Create the account: http://127.0.0.1:${port}/?setup=${code}`);
   runner.boot({ autorun });
 });

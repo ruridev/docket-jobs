@@ -8,6 +8,10 @@ const unsupported = {
   disableAutostart: () => {},
   syncAutostart: () => false,
   scanStartup: async () => ({ items: [], notes: ['unsupported'] }),
+  // The rest of darwin's startup functions run macOS commands (open, osascript, launchctl)
+  openStartupSettings: undefined,
+  disableStartupItem: undefined,
+  restoreStartupItem: undefined,
 };
 
 export const platform = process.platform === 'win32' ? win32

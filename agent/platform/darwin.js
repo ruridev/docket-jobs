@@ -151,10 +151,14 @@ export function agentToItem(p, full, { system = false } = {}) {
   const argv = Array.isArray(p.ProgramArguments) && p.ProgramArguments.length ? p.ProgramArguments : p.Program ? [p.Program] : null;
   if (!argv || argv.includes(AGENT_ENTRY)) return null; // docket-jobs itself
   const file = path.basename(full);
+  // The job runs the command through sh, so the plist's environment goes in front of it as KEY='value'
+  const env = Object.entries(p.EnvironmentVariables || {}).filter(([k]) => /^[A-Za-z_]\w*$/.test(k)).map(([k, v]) => `${k}=${shq(String(v))}`);
   return {
     key: `${system ? 'sysagent' : 'agent'}:${file}`, name: p.Label || path.parse(file).name,
     source: system ? 'sysagent' : 'agent',
-    command: argv.map(shq).join(' '), cwd: p.WorkingDirectory || '',
+    command: [...env, ...argv.map(shq)].join(' '), cwd: p.WorkingDirectory || '',
+    // KeepAlive (also its conditional form) restarts the program when it exits
+    restart: p.KeepAlive ? 'always' : '0',
     needsAdmin: system, allUsers: system,
     data: { file: full, admin: system },
   };

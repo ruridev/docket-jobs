@@ -184,6 +184,35 @@ test('a /Library LaunchAgent needs admin and is marked as all-users', async () =
   assert.equal(user.key, 'agent:me.tool.plist');
   assert.equal(user.command, "'/Users/me/My Tools/run'");
   assert.equal(user.needsAdmin, false);
+  assert.equal(user.restart, 'always');
+  assert.equal(sys.restart, '0');
+});
+
+test('LaunchAgent import keeps the environment in the command and KeepAlive as restart', async () => {
+  const { agentToItem } = await import('../agent/platform/darwin.js');
+  const item = agentToItem({ Label: 'e', ProgramArguments: ['/bin/srv'], RunAtLoad: true, KeepAlive: { SuccessfulExit: false },
+    EnvironmentVariables: { PORT: '3000', MSG: "it's", 'bad-key': 'x' } }, '/L/e.plist');
+  assert.equal(item.command, "PORT=3000 MSG='it'\\''s' /bin/srv");
+  assert.equal(item.restart, 'always');
+});
+
+test('imported jobs get the restart policy of the original item', async () => {
+  const { importer, fake, store, runner } = setup();
+  fake.entries.set('agent:k.plist', { key: 'agent:k.plist', name: 'k', source: 'agent', command: '/bin/k', cwd: '', restart: 'always' });
+  const res = await importer.import('agent:k.plist');
+  assert.equal(store.getJob(res.job.id).restart, 'always');
+  runner.shutdown();
+});
+
+test('data lives outside the clone unless an older data/ folder is already there', async () => {
+  const { defaultDataDir } = await import('../agent/paths.js');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'docket-jobs-root-'));
+  assert.equal(defaultDataDir({ root, platform: 'darwin', home: '/h' }), '/h/Library/Application Support/docket-jobs');
+  assert.equal(defaultDataDir({ root, platform: 'win32', env: { LOCALAPPDATA: 'C:\\L' }, home: 'C:\\h' }), path.join('C:\\L', 'docket-jobs'));
+  assert.equal(defaultDataDir({ root, platform: 'linux', env: {}, home: '/h' }), '/h/.local/share/docket-jobs');
+  fs.mkdirSync(path.join(root, 'data'));
+  assert.equal(defaultDataDir({ root, platform: 'darwin', home: '/h' }), path.join(root, 'data'));
+  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test('LaunchAgents that do not start at login are left out', async () => {
