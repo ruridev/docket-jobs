@@ -44,7 +44,8 @@ public static class DocketJobsPeb {
 }
 "@
 
-$procs = Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name, CommandLine
+$mySession = (Get-Process -Id $PID).SessionId
+$procs = Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name, CommandLine, SessionId
 $want = @{}
 foreach ($i in ($Ids -split ',')) { if ($i -match '^\d+$') { $want[[int]$i] = $true } }
 $out = foreach ($p in $procs) {
@@ -53,7 +54,8 @@ $out = foreach ($p in $procs) {
     pid = [int]$p.ProcessId
     ppid = [int]$p.ParentProcessId
     name = $p.Name
-    cmd = $p.CommandLine
+    # Other users' command lines can hold their secrets, so only this logon session's are kept
+    cmd = if ($p.SessionId -eq $mySession) { $p.CommandLine } else { $null }
     cwd = if ($want.ContainsKey([int]$p.ProcessId)) { [DocketJobsPeb]::Cwd([int]$p.ProcessId) } else { $null }
   }
 }
