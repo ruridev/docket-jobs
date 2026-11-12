@@ -101,6 +101,17 @@ test('tasks docket-jobs cannot run, or docket-jobs itself, are left out', () => 
   assert.equal(taskToItem({ path: '\\', name: 'self', actions: [{ exe: 'node.exe', args: `"${AGENT_ENTRY}"` }] }), null);
 });
 
+test('tasks that cmd.exe would read differently are left out', () => {
+  // Unquoted & | < > ^ are cmd.exe operators, not arguments
+  for (const args of ['a & b', 'x > out.txt', 'a|b', 'a ^b']) {
+    assert.equal(taskToItem({ path: '\\', name: 'op', actions: [{ exe: 'a.exe', args, cwd: '' }] }), null, args);
+  }
+  assert.equal(taskToItem({ path: '\\', name: 'q', actions: [{ exe: 'a.exe', args: '"a & b" --x', cwd: '' }] }).command, 'a.exe "a & b" --x');
+  // One job has one working folder
+  assert.equal(taskToItem({ path: '\\', name: 'two', actions: [{ exe: 'a.exe', cwd: 'C:\\A' }, { exe: 'b.exe', cwd: 'C:\\B' }] }), null);
+  assert.equal(taskToItem({ path: '\\', name: 'same', actions: [{ exe: 'a.exe', cwd: 'C:\\A' }, { exe: 'b.exe', cwd: 'C:\\A' }] }).command, 'a.exe && b.exe');
+});
+
 test('isoDurationSeconds reads Task Scheduler delays', () => {
   assert.equal(isoDurationSeconds('PT30S'), 30);
   assert.equal(isoDurationSeconds('PT1H2M3S'), 3723);

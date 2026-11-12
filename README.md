@@ -85,6 +85,7 @@ Importing turns the original entry off (or moves it to `data/startup-backup/`; f
 | Admin approval | Task Scheduler tasks only admins can change (UAC) | `/Library/LaunchAgents` (admin password) |
 
 - An item that ran with admin rights runs without them once imported.
+- On Windows a job runs through `cmd.exe`, so Task Scheduler tasks with unquoted `&`, `|`, `<`, `>` or `^` in their arguments, or with actions in different working folders, are not offered.
 - macOS does not let other programs turn off the background items inside apps. Turn those off in System Settings first, then import; after undo, turn them back on there.
 
 ## Data

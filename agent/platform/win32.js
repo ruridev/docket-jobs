@@ -194,6 +194,9 @@ function expandEnv(s) {
 export function taskToItem(task) {
   const actions = (task.actions || []).filter((a) => a && a.exe);
   if (!actions.length || actions.length !== (task.actions || []).length) return null;
+  // The job runs through cmd.exe: unquoted & | < > ^ would become operators, and a job has one working folder
+  if (actions.some((a) => /[&|<>^]/.test(String(a.args || '').replace(/"[^"]*"/g, '')))) return null;
+  if (new Set(actions.map((a) => a.cwd || '')).size > 1) return null;
   const cmd = actions.map((a) => {
     const exe = /^".*"$/.test(a.exe) || !/\s/.test(a.exe) ? a.exe : `"${a.exe}"`;
     return a.args ? `${exe} ${a.args}` : exe;
