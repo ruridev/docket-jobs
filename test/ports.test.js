@@ -105,12 +105,13 @@ const fakePorts = {
   guessServer: async (p) => ({ port: p, off: false, pid: 5, proc: 'node.exe', cwd: 'C:\\app', command: 'npm run dev' }),
 };
 const port = 19765 + Math.floor(Math.random() * 1000);
-const server = createServer({ store, runner, logs, platform, autostartSupported: false, port, webDir: WEB_DIR, auth: createAuth({ file: path.join(dir, 'auth.json'), cookie: 'docket_jobs_session' }), ports: fakePorts });
+const signIn = createAuth({ file: path.join(dir, 'auth.json'), cookie: 'docket_jobs_session', header: 'x-docket-jobs' });
+const server = createServer({ store, runner, logs, platform, autostartSupported: false, port, webDir: WEB_DIR, auth: signIn, ports: fakePorts });
 await new Promise((r) => server.listen(port, '127.0.0.1', r));
 after(() => { runner.shutdown(); server.close(); });
 const base = `http://127.0.0.1:${port}`;
-const setup = await fetch(`${base}/api/auth/setup`, { method: 'POST', headers: { 'X-Docket-Jobs': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'alice', password: 'correct horse' }) });
-const headers = { 'X-Docket-Jobs': '1', Cookie: setup.headers.get('set-cookie').split(';')[0] };
+const setup = await fetch(`${base}/api/auth/setup`, { method: 'POST', headers: { 'X-Docket-Jobs': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'alice', password: 'correct horse', code: signIn.setupCode() }) });
+const headers = { 'X-Docket-Jobs': (await setup.json()).token, Cookie: setup.headers.get('set-cookie').split(';')[0] };
 
 test('lists running servers, leaving out docket-jobs itself', async () => {
   const res = await fetch(`${base}/api/ports`, { headers });

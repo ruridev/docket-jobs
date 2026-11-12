@@ -16,7 +16,8 @@
 
   var TEXT = {
     ko: {
-      setupTitle: '계정 만들기', setupHelp: '이 앱에 로그인할 이름과 비밀번호를 정하세요. 이 PC에만 저장됩니다.',
+      setupTitle: '계정 만들기', setupHelp: '이 앱에 로그인할 이름과 비밀번호를 정하세요. 이 PC에만 저장됩니다. 설정 코드는 앱을 시작한 터미널(또는 로그)에 표시됩니다.',
+      code: '설정 코드', errCode: '설정 코드가 맞지 않습니다. 앱을 시작한 터미널이나 로그에 표시된 코드를 입력해 주세요.',
       loginTitle: '로그인', name: '이름', password: '비밀번호 (8자 이상)', confirm: '비밀번호 확인',
       create: '만들기', signIn: '로그인',
       errName: '이름을 입력해 주세요 (64자 이내).', errPassword: '비밀번호는 8자 이상이어야 합니다.', errConfirm: '비밀번호가 서로 다릅니다.',
@@ -25,7 +26,8 @@
       forgot: '비밀번호를 잊었다면 이 PC에서 아래 명령을 실행하세요. 계정만 지워지고 데이터는 그대로이며, 다시 열면 계정을 새로 만들 수 있습니다.',
     },
     ja: {
-      setupTitle: 'アカウントの作成', setupHelp: 'このアプリにサインインする名前とパスワードを決めてください。この PC にだけ保存されます。',
+      setupTitle: 'アカウントの作成', setupHelp: 'このアプリにサインインする名前とパスワードを決めてください。この PC にだけ保存されます。セットアップコードはアプリを起動したターミナル (またはログ) に表示されます。',
+      code: 'セットアップコード', errCode: 'セットアップコードが違います。アプリを起動したターミナルかログに表示されたコードを入力してください。',
       loginTitle: 'サインイン', name: '名前', password: 'パスワード (8 文字以上)', confirm: 'パスワードの確認',
       create: '作成', signIn: 'サインイン',
       errName: '名前を入力してください (64 文字以内)。', errPassword: 'パスワードは 8 文字以上にしてください。', errConfirm: 'パスワードが一致しません。',
@@ -34,7 +36,8 @@
       forgot: 'パスワードを忘れたときは、この PC で次のコマンドを実行してください。アカウントだけが消え、データはそのままです。開き直すとアカウントを作り直せます。',
     },
     en: {
-      setupTitle: 'Create your account', setupHelp: 'Choose the name and password to sign in to this app. They are kept on this PC only.',
+      setupTitle: 'Create your account', setupHelp: 'Choose the name and password to sign in to this app. They are kept on this PC only. The setup code is printed in the terminal (or log) where the app started.',
+      code: 'Setup code', errCode: 'The setup code is wrong. Enter the code printed in the terminal or log where the app started.',
       loginTitle: 'Sign in', name: 'Name', password: 'Password (8 characters or more)', confirm: 'Confirm password',
       create: 'Create', signIn: 'Sign in',
       errName: 'Enter a name (up to 64 characters).', errPassword: 'The password needs 8 characters or more.', errConfirm: "The passwords don't match.",
@@ -48,6 +51,11 @@
   if (!TEXT[lang]) lang = 'en';
   root.lang = lang;
   var t = TEXT[lang];
+
+  // The API token goes with the session cookie; only this origin can read it back
+  function keepToken(token) {
+    try { localStorage.setItem('docket-token', token || ''); } catch (e) { /* storage blocked */ }
+  }
 
   function call(path, body) {
     var headers = {};
@@ -63,6 +71,8 @@
     var err = $('authErr');
     var setup = false;
 
+    $('authCodeLabel').textContent = t.code;
+    $('authCode').value = new URLSearchParams(location.search).get('setup') || '';
     $('authNameLabel').textContent = t.name;
     $('authPassLabel').textContent = t.password;
     $('authConfirmLabel').textContent = t.confirm;
@@ -75,15 +85,16 @@
       $('authHelp').textContent = isSetup ? t.setupHelp : '';
       $('authHelp').hidden = !isSetup;
       $('authConfirmRow').hidden = !isSetup;
+      $('authCodeRow').hidden = !isSetup;
       $('authNote').hidden = isSetup;
       $('authSubmit').textContent = isSetup ? t.create : t.signIn;
       $('authPass').autocomplete = isSetup ? 'new-password' : 'current-password';
       form.hidden = false;
-      $('authName').focus();
+      (isSetup && !$('authCode').value ? $('authCode') : $('authName')).focus();
     }
 
     call('api/auth').then(function (r) {
-      if (r.data.user) return location.replace('./');
+      if (r.data.user && stored('docket-token')) return location.replace('./');
       mode(!r.data.account);
     }, function () { mode(false); err.textContent = t.errNetwork; });
 
@@ -96,14 +107,14 @@
       if (password.length < 8) { err.textContent = t.errPassword; return; }
       if (setup && password !== $('authConfirm').value) { err.textContent = t.errConfirm; return; }
       $('authSubmit').disabled = true;
-      call(setup ? 'api/auth/setup' : 'api/auth/login', { name: name, password: password }).then(function (r) {
+      call(setup ? 'api/auth/setup' : 'api/auth/login', { name: name, password: password, code: setup ? $('authCode').value : undefined }).then(function (r) {
         $('authSubmit').disabled = false;
-        if (r.status === 200) return location.replace('./');
+        if (r.status === 200) { keepToken(r.data.token); return location.replace('./'); }
         var code = r.data.error;
         if (code === 'exists') { mode(false); err.textContent = t.errExists; return; }
         if (code === 'no_account') { mode(true); return; }
         err.textContent = code === 'wait' ? t.errWait.replace('{n}', r.data.seconds)
-          : code === 'name' ? t.errName : code === 'password' ? t.errPassword : t.errWrong;
+          : code === 'code' ? t.errCode : code === 'name' ? t.errName : code === 'password' ? t.errPassword : t.errWrong;
       }, function () { $('authSubmit').disabled = false; err.textContent = t.errNetwork; });
     });
   }

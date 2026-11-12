@@ -191,12 +191,12 @@ export function createServer({ store, runner, logs, platform, autostartSupported
       const url = new URL(req.url, `http://${req.headers.host}`);
       if (url.pathname.startsWith('/api/')) {
         const origin = req.headers.origin;
-        if (req.headers['x-docket-jobs'] !== '1' || (origin && !allowedOrigins.has(origin))) {
+        if (!req.headers['x-docket-jobs'] || (origin && !allowedOrigins.has(origin))) {
           return send(res, 403, { error: 'forbidden' });
         }
         const signIn = await auth.route(req, res, url.pathname, () => readBody(req));
         if (signIn) return send(res, signIn.status, signIn.body);
-        if (!auth.user(req)) return send(res, 401, { error: 'signin' });
+        if (!auth.apiUser(req)) return send(res, 401, { error: 'signin' });
         return await api(req, res, url);
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }

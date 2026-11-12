@@ -17,15 +17,15 @@ const logs = new LogStore(path.join(dir, 'logs'));
 const runner = new Runner({ store, logs, platform });
 // autostartSupported: false keeps the test away from the real login items.
 const port = 18765 + Math.floor(Math.random() * 1000);
-const signIn = createAuth({ file: path.join(dir, 'auth.json'), cookie: 'docket_jobs_session' });
+const signIn = createAuth({ file: path.join(dir, 'auth.json'), cookie: 'docket_jobs_session', header: 'x-docket-jobs' });
 const server = createServer({ store, runner, logs, platform, autostartSupported: false, port, webDir: WEB_DIR, auth: signIn });
 await new Promise((r) => server.listen(port, '127.0.0.1', r));
 after(() => { runner.shutdown(); server.close(); });
 
 const base = `http://127.0.0.1:${port}`;
-const setup = await fetch(`${base}/api/auth/setup`, { method: 'POST', headers: { 'X-Docket-Jobs': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'alice', password: 'correct horse' }) });
+const setup = await fetch(`${base}/api/auth/setup`, { method: 'POST', headers: { 'X-Docket-Jobs': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'alice', password: 'correct horse', code: signIn.setupCode() }) });
 const session = setup.headers.get('set-cookie').split(';')[0];
-const auth = { 'X-Docket-Jobs': '1', Cookie: session };
+const auth = { 'X-Docket-Jobs': (await setup.json()).token, Cookie: session };
 const json = { 'Content-Type': 'application/json', ...auth };
 
 test('serves the UI when signed in, and the sign-in page when not', async () => {
@@ -44,6 +44,8 @@ test('a malformed path answers 400, not a server error', async () => {
 
 test('signed out, the API answers 401; the account cannot be created twice', async () => {
   assert.equal((await fetch(`${base}/api/state`, { headers: { 'X-Docket-Jobs': '1' } })).status, 401);
+  // The cookie alone, as any other localhost port receives it, is not a session for the API
+  assert.equal((await fetch(`${base}/api/state`, { headers: { 'X-Docket-Jobs': '1', Cookie: session } })).status, 401);
   assert.equal((await fetch(`${base}/api/state`, { headers: { 'X-Docket-Jobs': '1', Cookie: 'docket_jobs_session=YWxpY2U.9999999999999.forged' } })).status, 401);
   const again = await fetch(`${base}/api/auth/setup`, { method: 'POST', headers: { 'X-Docket-Jobs': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'mallory', password: 'something long' }) });
   assert.equal(again.status, 409);

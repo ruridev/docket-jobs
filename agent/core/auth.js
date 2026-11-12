@@ -1,6 +1,9 @@
 // Sign-in for the one owner of this app: a name and a password, no email (nothing is ever sent
 // out, and a forgotten password is reset on this PC). The account is in a 0600 JSON file; a session
 // is a cookie signed with a secret from that file, so restarting the server keeps you signed in.
+// Browsers send localhost cookies to every port, so the cookie alone is not enough for the API: each
+// request also carries a token that the sign-in response gave this page (kept in its own origin's
+// localStorage). Creating the account needs a setup code that only this PC's user can read.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -35,11 +38,13 @@ function credentials(body) {
 }
 
 /**
- * file:   where the account is kept (data/auth.json)
+ * file:   where the account is kept (data/auth.json). The setup code is kept next to it.
  * cookie: the session cookie name. Browsers share localhost cookies across ports, so each app
  *         needs its own name.
+ * header: the request header that carries the API token (lower case).
  */
-export function createAuth({ file, cookie }) {
+export function createAuth({ file, cookie, header }) {
+  const codeFile = path.join(path.dirname(file), 'setup-code');
   let cached = null;
   let cachedAt = -1;
   let fails = 0;
@@ -68,14 +73,18 @@ export function createAuth({ file, cookie }) {
   }
 
   const mac = (secret, body) => crypto.createHmac('sha256', secret).update(body).digest('base64url');
+  const apiToken = (a, session) => mac(a.secret, `api.${session}`);
 
+  /** Sets the session cookie and returns the API token that goes with it. */
   function issue(res, a) {
     const body = `${Buffer.from(a.name).toString('base64url')}.${Date.now() + SESSION_SECONDS * 1000}`;
-    res.setHeader('Set-Cookie', `${cookie}=${body}.${mac(a.secret, body)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_SECONDS}`);
+    const session = `${body}.${mac(a.secret, body)}`;
+    res.setHeader('Set-Cookie', `${cookie}=${session}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_SECONDS}`);
+    return apiToken(a, session);
   }
 
-  /** The signed-in name, or null. */
-  function user(req) {
+  // The account and the session cookie value when the cookie is valid, or null.
+  function session(req) {
     const a = account();
     const token = a && cookies(req)[cookie];
     if (!token) return null;
@@ -84,11 +93,35 @@ export function createAuth({ file, cookie }) {
     if (i < 0 || !same(token.slice(i + 1), mac(a.secret, body))) return null;
     const [name, exp] = body.split('.');
     if (!(Number(exp) > Date.now())) return null;
-    return Buffer.from(name, 'base64url').toString() === a.name ? a.name : null;
+    return Buffer.from(name, 'base64url').toString() === a.name ? { a, token } : null;
+  }
+
+  /** The signed-in name from the cookie alone, or null. Enough to pick which page to send. */
+  function user(req) {
+    return session(req)?.a.name ?? null;
+  }
+
+  /** The signed-in name when the request has both the cookie and its API token, or null. */
+  function apiUser(req) {
+    const s = session(req);
+    return s && same(req.headers[header] || '', apiToken(s.a, s.token)) ? s.a.name : null;
+  }
+
+  /** The code needed to create the account. Made on first use and kept (0600) until the account exists. */
+  function setupCode() {
+    try { return fs.readFileSync(codeFile, 'utf8').trim(); } catch { /* not made yet */ }
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    try {
+      fs.writeFileSync(codeFile, crypto.randomBytes(6).toString('hex') + '\n', { mode: 0o600, flag: 'wx' });
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e; // another process made it first
+    }
+    return fs.readFileSync(codeFile, 'utf8').trim();
   }
 
   async function setup(res, body) {
     if (account()) return { status: 409, body: { error: 'exists' } };
+    if (!same(String(body?.code ?? '').trim().toLowerCase(), setupCode())) return { status: 403, body: { error: 'code' } };
     const c = credentials(body);
     if (c.error) return { status: 400, body: { error: c.error } };
     const salt = crypto.randomBytes(16).toString('hex');
@@ -97,8 +130,8 @@ export function createAuth({ file, cookie }) {
     const a = { name: c.name, salt, hash, secret: crypto.randomBytes(32).toString('hex'), createdAt: new Date().toISOString() };
     save(a);
     cachedAt = -1;
-    issue(res, a);
-    return { status: 200, body: { user: a.name } };
+    try { fs.unlinkSync(codeFile); } catch { /* already gone */ }
+    return { status: 200, body: { user: a.name, token: issue(res, a) } };
   }
 
   async function login(res, body) {
@@ -126,8 +159,7 @@ export function createAuth({ file, cookie }) {
     }
     fails = 0;
     lockedUntil = 0;
-    issue(res, a);
-    return { status: 200, body: { user: a.name } };
+    return { status: 200, body: { user: a.name, token: issue(res, a) } };
   }
 
   /**
@@ -151,5 +183,5 @@ export function createAuth({ file, cookie }) {
     try { fs.unlinkSync(file); return true; } catch { return false; }
   }
 
-  return { user, route, reset, hasAccount: () => !!account() };
+  return { user, apiUser, route, reset, setupCode, hasAccount: () => !!account() };
 }

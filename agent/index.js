@@ -10,9 +10,9 @@ import { platform, autostartSupported } from './platform/index.js';
 import { createAuth } from './core/auth.js';
 
 const args = process.argv.slice(2);
-const auth = createAuth({ file: path.join(DATA_DIR, 'auth.json'), cookie: 'docket_jobs_session' });
+const auth = createAuth({ file: path.join(DATA_DIR, 'auth.json'), cookie: 'docket_jobs_session', header: 'x-docket-jobs' });
 if (args.includes('--reset-password')) {
-  console.log(auth.reset() ? 'Removed the account. Open docket-jobs to create it again.' : 'There is no account.');
+  console.log(auth.reset() ? 'Removed the account. Open docket-jobs and create it again with setup code ' + auth.setupCode() + '.' : 'There is no account.');
   process.exit(0);
 }
 const autorun = !args.includes('--no-autorun');
@@ -44,7 +44,10 @@ server.on('error', (err) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
+  // Make the setup code before announcing the server, so it exists once the address is printed
+  const code = !auth.hasAccount() && auth.setupCode();
   console.log(`docket-jobs agent: http://127.0.0.1:${port}`);
+  if (code) console.log(`Create the account: http://127.0.0.1:${port}/?setup=${code}`);
   runner.boot({ autorun });
 });
 

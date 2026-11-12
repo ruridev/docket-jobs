@@ -8,16 +8,18 @@ import { createAuth } from '../agent/core/auth.js';
 
 function fresh() {
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'docket-jobs-auth-')), 'auth.json');
-  return { file, auth: createAuth({ file, cookie: 'sid' }) };
+  return { file, auth: createAuth({ file, cookie: 'sid', header: 'x-token' }) };
 }
 // Just enough of a response to collect the Set-Cookie header.
 const fakeRes = () => ({ headers: {}, setHeader(k, v) { this.headers[k.toLowerCase()] = v; } });
-const req = (method, cookie = '') => ({ method, headers: { cookie } });
+const req = (method, cookie = '', token) => ({ method, headers: { cookie, ...(token !== undefined && { 'x-token': token }) } });
 const cookieOf = (res) => res.headers['set-cookie'].split(';')[0];
 
+// Setup gets the right setup code unless the test passes its own.
 async function call(auth, pathname, body, cookie) {
   const res = fakeRes();
-  const r = await auth.route(req(body ? 'POST' : 'GET', cookie), res, pathname, async () => body);
+  const sent = pathname === '/api/auth/setup' && body && !('code' in body) ? { ...body, code: auth.setupCode() } : body;
+  const r = await auth.route(req(body ? 'POST' : 'GET', cookie), res, pathname, async () => sent);
   return { ...r, res };
 }
 
@@ -83,4 +85,33 @@ test('logout clears the cookie; reset removes the account even for a running ser
   assert.equal((await call(auth, '/api/auth/setup', { name: 'alice', password: 'new password' })).status, 200);
   assert.equal(auth.reset(), true);
   assert.equal(auth.reset(), false);
+});
+
+test('setup needs the setup code from the data folder, which goes away once the account exists', async () => {
+  const { auth, file } = fresh();
+  const code = auth.setupCode();
+  assert.match(code, /^[0-9a-f]{12}$/);
+  assert.equal(auth.setupCode(), code, 'the code stays the same until it is used');
+  const codeFile = path.join(path.dirname(file), 'setup-code');
+  if (process.platform !== 'win32') assert.equal(fs.statSync(codeFile).mode & 0o777, 0o600);
+  for (const wrong of [undefined, '', 'nope', code.slice(1)]) {
+    assert.equal((await call(auth, '/api/auth/setup', { name: 'mallory', password: 'long enough', code: wrong })).status, 403, String(wrong));
+  }
+  assert.equal(auth.hasAccount(), false);
+  assert.equal((await call(auth, '/api/auth/setup', { name: 'alice', password: 'long enough', code: ` ${code.toUpperCase()} ` })).status, 200);
+  assert.equal(fs.existsSync(codeFile), false);
+});
+
+test('the API needs the token that came with the cookie, not the cookie alone', async () => {
+  const { auth } = fresh();
+  const ok = await call(auth, '/api/auth/setup', { name: 'alice', password: 'long enough' });
+  const cookie = cookieOf(ok.res);
+  assert.match(ok.body.token, /^[\w-]{20,}$/);
+  assert.equal(auth.apiUser(req('GET', cookie, ok.body.token)), 'alice');
+  for (const bad of [undefined, '', '1', ok.body.token.slice(1)]) assert.equal(auth.apiUser(req('GET', cookie, bad)), null, String(bad));
+  assert.equal(auth.apiUser(req('GET', '', ok.body.token)), null);
+  // A new sign-in gets its own token; the old token does not fit the new cookie
+  const again = await call(auth, '/api/auth/login', { name: 'alice', password: 'long enough' });
+  assert.equal(auth.apiUser(req('GET', cookieOf(again.res), again.body.token)), 'alice');
+  if (cookieOf(again.res) !== cookie) assert.equal(auth.apiUser(req('GET', cookieOf(again.res), ok.body.token)), null);
 });

@@ -71,8 +71,13 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// The API token from sign-in, kept in this origin's storage (cookies alone are shared with every localhost port)
+const apiToken = () => { try { return localStorage.getItem('docket-token') || '1'; } catch { return '1'; } };
+// Signed out, or the cookie is valid but this browser has no token: drop the cookie so the page shows the sign-in form
+const signedOut = (header) => fetch('/api/auth/logout', { method: 'POST', headers: { [header]: '1' } }).catch(() => {}).then(() => { location.reload(); return new Promise(() => {}); });
+
 async function api(method, url, body, timeoutMs = 5000) {
-  const headers = { 'X-Docket-Jobs': '1' };
+  const headers = { 'X-Docket-Jobs': apiToken() };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   const res = await fetch(url, {
     method,
@@ -82,7 +87,7 @@ async function api(method, url, body, timeoutMs = 5000) {
     signal: AbortSignal.timeout(timeoutMs),
   });
   // Signed out (or the session ran out): reloading shows the sign-in page.
-  if (res.status === 401) { location.reload(); return new Promise(() => {}); }
+  if (res.status === 401) return signedOut('X-Docket-Jobs');
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error || String(res.status)), { data });
   return data;
