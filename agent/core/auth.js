@@ -93,6 +93,8 @@ export function createAuth({ file, cookie, header }) {
     if (i < 0 || !same(token.slice(i + 1), mac(a.secret, body))) return null;
     const [name, exp] = body.split('.');
     if (!(Number(exp) > Date.now())) return null;
+    // Signing out ends every session issued before it
+    if (Number(exp) - SESSION_SECONDS * 1000 <= (a.signedOutAt || 0)) return null;
     return Buffer.from(name, 'base64url').toString() === a.name ? { a, token } : null;
   }
 
@@ -172,6 +174,13 @@ export function createAuth({ file, cookie, header }) {
     if (pathname === '/api/auth/setup') return setup(res, await readBody());
     if (pathname === '/api/auth/login') return login(res, await readBody());
     if (pathname === '/api/auth/logout') {
+      // With the API token this is you signing out: end every session, not just this cookie.
+      // Without it (another port replaying the cookie, or a page that lost its token) only drop the cookie.
+      const a = apiUser(req) && account();
+      if (a) {
+        save({ ...a, signedOutAt: Date.now() });
+        cachedAt = -1;
+      }
       res.setHeader('Set-Cookie', `${cookie}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
       return { status: 200, body: { ok: true } };
     }

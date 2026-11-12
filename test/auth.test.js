@@ -115,3 +115,20 @@ test('the API needs the token that came with the cookie, not the cookie alone', 
   assert.equal(auth.apiUser(req('GET', cookieOf(again.res), again.body.token)), 'alice');
   if (cookieOf(again.res) !== cookie) assert.equal(auth.apiUser(req('GET', cookieOf(again.res), ok.body.token)), null);
 });
+
+test('signing out with the token ends every session; without it only the cookie is dropped', async () => {
+  const { auth } = fresh();
+  const ok = await call(auth, '/api/auth/setup', { name: 'alice', password: 'long enough' });
+  const other = await call(auth, '/api/auth/login', { name: 'alice', password: 'long enough' });
+  const res = fakeRes();
+  // A replayed cookie without the token cannot sign anyone out
+  await auth.route(req('POST', cookieOf(ok.res)), res, '/api/auth/logout', async () => ({}));
+  assert.equal(auth.apiUser(req('GET', cookieOf(ok.res), ok.body.token)), 'alice');
+  await new Promise((r) => setTimeout(r, 5));
+  await auth.route(req('POST', cookieOf(ok.res), ok.body.token), fakeRes(), '/api/auth/logout', async () => ({}));
+  assert.equal(auth.user(req('GET', cookieOf(ok.res))), null);
+  assert.equal(auth.user(req('GET', cookieOf(other.res))), null, 'the other browser is signed out too');
+  await new Promise((r) => setTimeout(r, 5));
+  const again = await call(auth, '/api/auth/login', { name: 'alice', password: 'long enough' });
+  assert.equal(auth.apiUser(req('GET', cookieOf(again.res), again.body.token)), 'alice');
+});
