@@ -99,7 +99,9 @@ export function descendants(table, pid) {
 
 /** Answers whether an HTTP server answers at url (any status counts), with the start of the page. */
 export function probe(url, timeout = 900) {
-  return new Promise((resolve) => {
+  return new Promise((done) => {
+    let deadline;
+    const resolve = (v) => { clearTimeout(deadline); done(v); };
     const req = http.get(url, { timeout, headers: { accept: 'text/html,*/*' } }, (res) => {
       let body = '';
       res.setEncoding('utf8');
@@ -108,6 +110,8 @@ export function probe(url, timeout = 900) {
       res.on('end', done);
       res.on('close', done);
     });
+    // The socket timeout only catches silence; a server that sends a byte now and then needs a deadline.
+    deadline = setTimeout(() => { req.destroy(); resolve({ ok: false }); }, timeout);
     req.on('timeout', () => req.destroy());
     req.on('error', () => resolve({ ok: false }));
   });
@@ -186,6 +190,9 @@ export function simplifyCommand(cmd) {
   return `${exe}${m[4] ? ' ' + m[4] : ''}`.trim();
 }
 
+// Suggested commands run through the shell, so offer only plain ones: `npm run dev`, `node server.js --port=3000`.
+const SAFE_CMD = /^(?:(?:npm|yarn|pnpm|bun)(?: run)? [\w:.-]+|(?:node|python3?) [\w./@-]+)(?: [\w./@:=-]+)*$/;
+
 /**
  * Guesses how a running server was started: its project folder and command.
  * Walks up from the process to the package manager that launched it (npm/yarn/pnpm/bun).
@@ -204,7 +211,7 @@ export function guessLaunch(table, pid) {
     p = byPid.get(p.ppid);
   }
   if (!command) command = simplifyCommand(self.cmd);
-  return { pid, proc: self.name || '', cwd: projectRoot(self.cwd || ''), command };
+  return { pid, proc: self.name || '', cwd: projectRoot(self.cwd || ''), command: SAFE_CMD.test(command) ? command : '' };
 }
 
 /** How the server on port was started, or { off: true } when nothing listens there anymore. */

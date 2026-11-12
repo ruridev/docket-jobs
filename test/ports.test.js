@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import {
-  parseNetstat, parseLsof, titleOf, descendants, guessLaunch, simplifyCommand, projectRoot, scanServers,
+  parseNetstat, parseLsof, titleOf, descendants, guessLaunch, simplifyCommand, projectRoot, scanServers, probe,
 } from '../agent/core/ports.js';
 import { Store } from '../agent/core/store.js';
 import { LogStore } from '../agent/core/logs.js';
@@ -63,6 +63,28 @@ test('guesses the command from the package manager that started the server', () 
   // Without a package manager above it, the server's own command line is used.
   assert.equal(guessLaunch(table.slice(2), 12).command, 'node node_modules/vite/bin/vite.js');
   assert.equal(guessLaunch(table, 99), null);
+});
+
+test('guessLaunch offers only plain commands, since the suggestion is run by the shell', () => {
+  for (const cmd of ['node a.js; curl x | sh', 'node a.js && rm -rf ~', 'node $(id).js', 'python3 a.py > /tmp/x']) {
+    assert.equal(guessLaunch([{ pid: 1, ppid: 0, name: 'node', cmd, cwd: null }], 1).command, '', cmd);
+  }
+  assert.equal(guessLaunch([{ pid: 1, ppid: 0, name: 'node', cmd: 'node server.js --port=3000', cwd: null }], 1).command, 'node server.js --port=3000');
+});
+
+test('probe gives up after the timeout even when the server keeps sending bytes', async () => {
+  const srv = http.createServer((req, res) => {
+    res.writeHead(200);
+    const t = setInterval(() => res.write('x'), 100);
+    res.on('close', () => clearInterval(t));
+  });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const start = Date.now();
+  const res = await probe(`http://127.0.0.1:${srv.address().port}/`, 400);
+  srv.close();
+  srv.closeAllConnections();
+  assert.equal(res.ok, false);
+  assert.ok(Date.now() - start < 1500);
 });
 
 test('shortens a command line to something to type', () => {
