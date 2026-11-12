@@ -134,13 +134,15 @@ async function disabledLabels() {
   return (await launchdOverrides()).off;
 }
 
+// Tests point the folders that root acts on at temp folders; outside `node --test` they are fixed.
+const testDir = (name) => (process.env.NODE_TEST_CONTEXT ? process.env[name] : '');
 // LaunchAgents for every user. Readable by anyone, but owned by root, so turning one off
 // takes an administrator password. (LaunchDaemons are left out on purpose: they run as
 // root before login, which docket-jobs, running as the user, can't stand in for.)
-const SYSTEM_AGENTS = process.env.DOCKET_JOBS_SYSTEM_AGENTS_DIR || '/Library/LaunchAgents';
+const SYSTEM_AGENTS = testDir('DOCKET_JOBS_SYSTEM_AGENTS_DIR') || '/Library/LaunchAgents';
 // Backups of /Library agents go to a root-owned folder, created by the same admin command, so
 // that no process of this user can swap the file that root later moves back into /Library.
-const SYSTEM_BACKUP_DIR = process.env.DOCKET_JOBS_SYSTEM_BACKUP_DIR || '/Library/Application Support/docket-jobs/startup-backup';
+const SYSTEM_BACKUP_DIR = testDir('DOCKET_JOBS_SYSTEM_BACKUP_DIR') || '/Library/Application Support/docket-jobs/startup-backup';
 const PLIST_NAME = /^[\w.@-]+\.plist$/;
 
 /** Turns a LaunchAgent plist (as JSON) into a startup item, or null if it doesn't start at login. */
@@ -187,13 +189,14 @@ function adminError(code, cause) {
 }
 
 /**
- * Runs one shell command as root behind macOS's administrator password prompt.
- * The command goes in as an osascript argument, so no AppleScript string escaping is involved.
+ * Runs one shell command as root behind macOS's administrator password prompt, which shows
+ * `prompt` so you can see what you are approving. Both go in as osascript arguments, so no
+ * AppleScript string escaping is involved.
  */
-async function runAsAdmin(shellCommand) {
-  const script = 'function run(a){const app=Application.currentApplication();app.includeStandardAdditions=true;app.doShellScript(a[0],{administratorPrivileges:true})}';
+async function runAsAdmin(shellCommand, prompt) {
+  const script = 'function run(a){const app=Application.currentApplication();app.includeStandardAdditions=true;app.doShellScript(a[0],{administratorPrivileges:true,withPrompt:a[1]})}';
   try {
-    await jxa(script, [shellCommand], 180000);
+    await jxa(script, [shellCommand, prompt], 180000);
   } catch (err) {
     // -128 = the user pressed Cancel on the password prompt.
     throw adminError(/-128/.test(String(err.stderr || err.message)) ? 'uac_cancelled' : 'admin_failed', err);
@@ -386,7 +389,8 @@ export async function disableStartupItem(item, backupDir) {
     }
     const dest = backupPath(SYSTEM_BACKUP_DIR, name);
     const dir = shq(SYSTEM_BACKUP_DIR);
-    await runAsAdmin(`/bin/mkdir -p ${dir} && /bin/chmod 755 ${dir} && [ ! -e ${shq(dest)} ] && /bin/mv -n ${shq(from)} ${shq(dest)}`);
+    await runAsAdmin(`/bin/mkdir -p ${dir} && /bin/chmod 755 ${dir} && [ ! -e ${shq(dest)} ] && /bin/mv -n ${shq(from)} ${shq(dest)}`,
+      `docket-jobs wants to turn off the startup item ${name} by moving it from ${SYSTEM_AGENTS} to ${SYSTEM_BACKUP_DIR}.`);
     return { kind: 'agent', from, to: dest, admin };
   }
   if (item.source === 'appagent') {
@@ -415,7 +419,8 @@ export async function restoreStartupItem(backup, key, backupDir) {
       return;
     }
     const dest = shq(to);
-    await runAsAdmin(`[ ! -e ${dest} ] && /bin/mv -n ${shq(from)} ${dest} && /usr/sbin/chown -h root:wheel ${dest} && /bin/chmod -h 644 ${dest}`);
+    await runAsAdmin(`[ ! -e ${dest} ] && /bin/mv -n ${shq(from)} ${dest} && /usr/sbin/chown -h root:wheel ${dest} && /bin/chmod -h 644 ${dest}`,
+      `docket-jobs wants to turn the startup item ${path.basename(to)} back on by moving it back to ${path.dirname(to)}.`);
     return;
   }
   if (backup.kind === 'manual') {

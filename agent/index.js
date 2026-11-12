@@ -18,6 +18,10 @@ if (args.includes('--reset-password')) {
 const autorun = !args.includes('--no-autorun');
 const portArg = args.find((a) => a.startsWith('--port='));
 const port = portArg ? Number(portArg.split('=')[1]) : Number(process.env.DOCKET_JOBS_PORT) || DEFAULT_PORT;
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  console.error(`docket-jobs: not a valid port: ${portArg ? portArg.split('=')[1] : process.env.DOCKET_JOBS_PORT}`);
+  process.exit(1);
+}
 
 if (autostartSupported) {
   try {

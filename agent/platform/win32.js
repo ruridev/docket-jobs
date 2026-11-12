@@ -329,7 +329,7 @@ export async function disableStartupItem(item, backupDir) {
   throw new Error(`unknown source ${item.source}`);
 }
 
-export async function restoreStartupItem(backup, key) {
+export async function restoreStartupItem(backup, key, backupDir) {
   if (backup.kind === 'task') {
     const task = await findTask(key);
     await setTaskEnabled(task.path, task.name, true, task.admin);
@@ -341,9 +341,12 @@ export async function restoreStartupItem(backup, key) {
     return;
   }
   if (backup.kind === 'folder') {
-    if (fs.existsSync(backup.from)) throw new Error('A file with the same name is already there');
-    fs.mkdirSync(path.dirname(backup.from), { recursive: true });
-    fs.renameSync(backup.to, backup.from);
+    // Both paths are rebuilt from the fixed folders: only the file names come from the record.
+    const from = path.join(backupDir, path.basename(String(backup.to)));
+    const to = path.join(STARTUP_DIR, path.basename(String(backup.from)));
+    if (fs.existsSync(to)) throw new Error('A file with the same name is already there');
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.renameSync(from, to);
     return;
   }
   throw new Error(`unknown backup ${backup.kind}`);
