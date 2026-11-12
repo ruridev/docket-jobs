@@ -8,7 +8,7 @@ docket-jobs manages the programs that should start with your PC, in one place. I
 - **Logs and status**: see which jobs are running, done or failed, with their output.
 - **Pick from running servers**: choose a local web server that is already running, and docket-jobs fills in its command and folder.
 
-It works on Windows and macOS.
+It works on Windows and macOS. On Linux the agent and jobs run, but autostart and importing startup items are not supported.
 
 ## Requirements
 
@@ -38,11 +38,11 @@ It works on Windows and macOS.
 
 | Environment variable | Default | |
 | --- | --- | --- |
-| `DOCKET_JOBS_PORT` | `8765` | Port to listen on |
+| `DOCKET_JOBS_PORT` | `8765` | Port to listen on (or `npm start -- --port=8766`) |
 | `DOCKET_JOBS_DATA_DIR` | `./data` | Where jobs, state and logs are stored |
-| `DOCKET_FRAME_ANCESTORS` | `'self' http://localhost:4600 http://127.0.0.1:4600` | Pages allowed to embed the UI (CSP `frame-ancestors`); the default is the docket portal |
+| `DOCKET_FRAME_ANCESTORS` | `'self' http://localhost:4600 http://127.0.0.1:4600` | Pages allowed to embed the UI (CSP `frame-ancestors`); the default is the docket portal. Set `"'self'"` if you don't use docket |
 
-To update, stop the agent, run `git pull` and start it again, or log in again if autostart is on. Your jobs are in `data/`, which git does not track. If you move this folder or reinstall Node, run `autostart:off` and `autostart:on` again.
+To update, stop the agent, run `git pull` and start it again, or log in again if autostart is on. Your jobs are in `data/`, which git does not track. If you move this folder or reinstall Node, run `autostart:off` and `autostart:on` again. With autostart on, starting the agent from another copy of this folder points the login entry at that copy.
 
 ### Uninstalling
 
@@ -54,9 +54,11 @@ To update, stop the agent, run `git pull` and start it again, or log in again if
 
 The first time you open docket-jobs, it asks you to create an account: a name and a password of 8 characters or more. There is one account and no email, because nothing is ever sent out and the account only guards this app on this PC. From then on every API call needs the signed-in session.
 
+- Creating the account needs a setup code. While there is no account, the server prints a link with the code when it starts (`Create the account: http://127.0.0.1:8765/?setup=...`), and the code is also in `data/setup-code` (readable by your user only). Opening the link fills in the code; the code is removed once the account exists.
 - The account is kept in `data/auth.json` (0600): a scrypt hash of the password and the secret that signs the session cookie. A session lasts 30 days and survives restarts.
-- Forgot the password? Run `node agent/index.js --reset-password` in this folder. It removes only the account; your data stays, and the next visit asks you to create the account again.
-- Create the account right after the first start: until then, any program on this PC that can reach the port could create it first.
+- Browsers send `localhost` cookies to every port, so the cookie alone is not a session: signing in also gives the page an API token, kept in this browser's storage for this address only and sent with every API call. Another browser or a cleared storage asks you to sign in again.
+- **Sign out** ends every session of this account, in every browser.
+- Forgot the password? Run `node agent/index.js --reset-password` in this folder. It removes only the account and prints a new setup code; your data stays.
 - docket, docket-gits and docket-jobs each have their own account. Inside the docket portal, each tool shows its own sign-in page the first time.
 
 ## How it works
@@ -96,7 +98,7 @@ Importing turns the original entry off (or moves it to `data/startup-backup/`; f
 | `data/logs/<id>.out.log` | Raw program output |
 | `data/imports.json`, `data/startup-backup/` | Imported startup items and the originals for undo (`/Library/LaunchAgents` originals are in `/Library/Application Support/docket-jobs/startup-backup/`) |
 
-`data/` and the files in it are readable by your user only.
+`data/` and the files in it are readable by your user only (mode 0700 / 0600; on Windows an access list for your user, set with `icacls`).
 
 Theme and language are saved in the browser only.
 
@@ -106,7 +108,8 @@ Theme and language are saved in the browser only.
 - **Importing changes your OS startup items.** You can undo it from the UI as long as `data/` is kept.
 - The UI and the API listen on `127.0.0.1` only. Because the API can run any command, the server checks the `Host` header, the `Origin` header and a custom `X-Docket-Jobs` header to reject requests from other web pages.
 - The API needs the signed-in session (see [Signing in](#signing-in)). A program running as your user can still read `data/`, so this is no defense against malware on your account. Don't run docket-jobs on a PC you share with other people.
-- Only the docket portal (`http://localhost:4600`) may embed the UI in a frame. Change this with `DOCKET_FRAME_ANCESTORS`.
+- Only the docket portal (`http://localhost:4600`) may embed the UI in a frame. If you don't use docket, or run something else on port 4600, set `DOCKET_FRAME_ANCESTORS="'self'"`.
+- The macOS administrator prompt names the startup item that is moved and where.
 - Undoing an import never takes a path from `data/imports.json` for an admin command: `/Library/LaunchAgents` items are restored only from the root-owned backup folder, by file name.
 
 ## Troubleshooting

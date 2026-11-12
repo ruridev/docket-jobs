@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 
 export const RESTART_POLICIES = ['0', '3', 'always'];
@@ -23,10 +24,22 @@ export function writeJsonAtomic(file, data) {
   fs.renameSync(tmp, file);
 }
 
+// File modes do nothing on Windows: give the folder an ACL for this user only (its files inherit it).
+function windowsOwnerOnly(dir) {
+  if (process.platform !== 'win32') return;
+  const user = process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\${process.env.USERNAME}` : process.env.USERNAME;
+  try {
+    execFileSync('icacls', [dir, '/inheritance:r', '/grant:r', `${user}:(OI)(CI)F`], { stdio: 'ignore', windowsHide: true });
+  } catch {
+    console.warn(`Could not limit ${path.basename(dir)}/ to this user with icacls`);
+  }
+}
+
 /** Creates the data folder readable by this user only, and tightens an existing one. */
 export function ensurePrivateDir(dir) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   try { fs.chmodSync(dir, 0o700); } catch { /* not supported (Windows) */ }
+  windowsOwnerOnly(dir);
 }
 
 
