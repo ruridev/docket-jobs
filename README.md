@@ -122,6 +122,7 @@ Theme and language are saved in the browser only.
 - Only the docket portal (`http://localhost:4600`) may embed the UI in a frame. If you don't use docket, or run something else on port 4600, set `DOCKET_FRAME_ANCESTORS="'self'"`.
 - The macOS administrator prompt names the startup item that is moved and where.
 - Undoing an import never takes a path from `<data>/imports.json` for an admin command: `/Library/LaunchAgents` items are restored only from the root-owned backup folder, by file name.
+- Found a security problem? Please report it privately through [GitHub's private vulnerability reporting](https://github.com/ruridev/docket-jobs/security/advisories/new), not in a public issue.
 
 ## Troubleshooting
 
