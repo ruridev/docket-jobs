@@ -40,7 +40,7 @@ It works on Windows and macOS. On Linux the agent and jobs run, but autostart an
 | --- | --- | --- |
 | `DOCKET_JOBS_PORT` | `8765` | Port to listen on (or `npm start -- --port=8766`) |
 | `DOCKET_JOBS_DATA_DIR` | see [Data](#data) | Where jobs, state and logs are stored |
-| `DOCKET_FRAME_ANCESTORS` | `'self' http://localhost:4600 http://127.0.0.1:4600` | Pages allowed to embed the UI (CSP `frame-ancestors`); the default is the docket portal. Set `"'self'"` if you don't use docket |
+| `DOCKET_FRAME_ANCESTORS` | `'self' http://localhost:4600 http://127.0.0.1:4600` | Pages allowed to embed the UI (CSP `frame-ancestors`). Set `"'self'"` to allow no other page |
 
 To update, stop the agent, run `git pull` and start it again, or log in again if autostart is on. Your jobs are in the data folder (see [Data](#data)), not in this folder. If you move this folder or reinstall Node, run `autostart:off` and `autostart:on` again. With autostart on, starting the agent from another copy of this folder points the login entry at that copy.
 
@@ -59,7 +59,6 @@ The first time you open docket-jobs, it asks you to create an account: a name an
 - Browsers send `localhost` cookies to every port, so the cookie alone is not a session: signing in also gives the page an API token, kept in this browser's storage for this address only and sent with every API call. Another browser or a cleared storage asks you to sign in again.
 - **Sign out** ends every session of this account, in every browser.
 - Forgot the password? Run `node agent/index.js --reset-password` in this folder. It removes only the account and prints a new setup code; your data stays.
-- docket, docket-gits and docket-jobs each have their own account. Inside the docket portal, each tool shows its own sign-in page the first time.
 
 ## How it works
 
@@ -119,7 +118,7 @@ Theme and language are saved in the browser only.
 - **Importing changes your OS startup items.** You can undo it from the UI as long as `<data>/` is kept.
 - The UI and the API listen on `127.0.0.1` only. Because the API can run any command, the server checks the `Host` header, the `Origin` header and a custom `X-Docket-Jobs` header to reject requests from other web pages.
 - The API needs the signed-in session (see [Signing in](#signing-in)). A program running as your user can still read `<data>/`, so this is no defense against malware on your account. Don't run docket-jobs on a PC you share with other people.
-- Only the docket portal (`http://localhost:4600`) may embed the UI in a frame. If you don't use docket, or run something else on port 4600, set `DOCKET_FRAME_ANCESTORS="'self'"`.
+- Only pages on `http://localhost:4600` may embed the UI in a frame (`DOCKET_FRAME_ANCESTORS`). If you run something else on port 4600, set `DOCKET_FRAME_ANCESTORS="'self'"`.
 - The macOS administrator prompt names the startup item that is moved and where.
 - Undoing an import never takes a path from `<data>/imports.json` for an admin command: `/Library/LaunchAgents` items are restored only from the root-owned backup folder, by file name.
 - Found a security problem? Please report it privately through [GitHub's private vulnerability reporting](https://github.com/ruridev/docket-jobs/security/advisories/new), not in a public issue.
@@ -133,11 +132,6 @@ Theme and language are saved in the browser only.
 **Port 8765 is already in use.** Set `DOCKET_JOBS_PORT`.
 
 **A job failed.** Open its log in the UI, or `<data>/logs/<id>.out.log`. Check that the command works in a terminal from the job's folder.
-
-## Related
-
-- [docket](https://github.com/ruridev/docket): one page to open, start and stop the local web tools on your PC.
-- [docket-gits](https://github.com/ruridev/docket-gits): review GitHub pull requests with an AI agent, deciding on each finding yourself.
 
 ## Development
 
