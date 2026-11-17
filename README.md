@@ -1,6 +1,8 @@
 <p align="center"><img src="web/icon.svg" width="96" alt=""></p>
 
-# docket-jobs
+<h1 align="center">docket-jobs</h1>
+
+<p align="center">Start programs with your PC, managed from a browser.</p>
 
 docket-jobs manages the programs that should start with your PC, in one place. Instead of registering each program with the OS in its own way, you register docket-jobs once, and add, remove and switch jobs on and off from a browser.
 
