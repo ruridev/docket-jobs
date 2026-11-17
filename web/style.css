@@ -57,6 +57,13 @@ button { cursor: pointer; }
 .agent-status { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; font-size: 13px; font-weight: 600; color: var(--running); }
 .agent-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
 .agent-status.offline { color: var(--offline); }
+/* Footer sits at the bottom edge on short pages and stays visible while scrolling long ones */
+body { display: flex; flex-direction: column; min-height: 100dvh; }
+body > main { width: 100%; }
+.site-foot { flex: none; display: flex; justify-content: flex-end; padding: 6px 16px; border-top: 1px solid var(--border); background: var(--panel); }
+.site-foot a { display: inline-flex; color: var(--muted); }
+.site-foot a:hover { color: var(--text); }
+.site-foot { margin-top: auto; position: sticky; bottom: 0; }
 .main { padding-top: 28px; padding-bottom: 48px; display: flex; flex-direction: column; gap: 16px; }
 .page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .page-head > div { flex: 1 1 280px; }
@@ -209,13 +216,14 @@ dl { margin: 0; }
 :root[data-theme="green"] body .dialog { border: 1px solid var(--accent); border-radius: 4px; }
 :root[data-theme="green"] body .field :is(input, select) { background: var(--bg); border-color: var(--border); border-radius: 3px; }
 :root[data-theme="green"] body .log { background: var(--bg); border: 1px solid var(--border); }
-:root[data-theme="green"] body .topbar { background: var(--bg); }
+:root[data-theme="green"] body :is(.topbar, .site-foot) { background: var(--bg); }
 
 /* g6: pixel font, no rounding or shadows, [bracketed] text buttons, inverted bars. */
 :root[data-theme="g6"] body { font-family: "Fusion Pixel KO", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, ui-monospace, sans-serif; }
 :root[data-theme="g6"] body * { border-radius: 0 !important; box-shadow: none !important; font-weight: 400 !important; }
 :root[data-theme="g6"] body :is(button, input, select, .mono, .log) { font-family: inherit; }
 :root[data-theme="g6"] body .topbar { border-bottom: 2px solid var(--text); }
+:root[data-theme="g6"] body .site-foot { border-top: 2px solid var(--text); }
 :root[data-theme="g6"] body :is(.btn, .link-btn) { min-width: 0; border: 0; background: none; padding: 0 4px; color: var(--text); }
 :root[data-theme="g6"] body :is(.btn, .link-btn)::before { content: "["; margin-right: 4px; }
 :root[data-theme="g6"] body :is(.btn, .link-btn)::after { content: "]"; margin-left: 4px; }
