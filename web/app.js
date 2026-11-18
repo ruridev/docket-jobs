@@ -541,6 +541,9 @@ const actions = {
   },
 };
 
+// Actions that only change this page; after any other one the state is read again.
+const LOCAL_ACTIONS = new Set(['add', 'edit', 'delete', 'toggleAdv', 'scanPorts', 'pickPort', 'closeDialog', 'menu', 'home', 'back', 'settings', 'import']);
+
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-action]');
   if (!el) {
@@ -557,8 +560,7 @@ document.addEventListener('click', async (e) => {
     /* the next refresh shows the real state */
   }
   render();
-  if (!['add', 'edit', 'delete', 'toggleAdv', 'scanPorts', 'pickPort', 'closeDialog', 'menu', 'home', 'back', 'settings', 'open', 'import'].includes(name)) await refresh();
-  else if (name === 'open') await refresh();
+  if (!LOCAL_ACTIONS.has(name)) await refresh();
 });
 
 document.addEventListener('keydown', (e) => {
