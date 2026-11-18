@@ -15,15 +15,12 @@ export function spawnJob(command, { cwd, stdio }) {
   return spawn(command, [], { cwd, shell: true, detached: true, stdio, env: process.env });
 }
 
+const USER_AGENTS = path.join(os.homedir(), 'Library', 'LaunchAgents');
 const LABEL = process.env.DOCKET_JOBS_AUTOSTART_NAME || 'com.ruridev.docket-jobs';
-const PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', `${LABEL}.plist`);
+const PLIST = path.join(USER_AGENTS, `${LABEL}.plist`);
 
 function xml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-export function plistPath() {
-  return PLIST;
 }
 
 export function plistContent() {
@@ -90,8 +87,6 @@ export function processStartTime(pid) {
 
 /* ---------- other programs' startup items ---------- */
 
-const USER_AGENTS = path.join(os.homedir(), 'Library', 'LaunchAgents');
-
 function shq(s) {
   return /^[\w@%+=:,./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`;
 }
@@ -124,10 +119,6 @@ async function launchdOverrides() {
   }
 }
 
-async function disabledLabels() {
-  return (await launchdOverrides()).off;
-}
-
 // Tests point the folders that root acts on at temp folders; outside `node --test` they are fixed.
 const testDir = (name) => (process.env.NODE_TEST_CONTEXT ? process.env[name] : '');
 // LaunchAgents for every user. Readable by anyone, but owned by root, so turning one off
@@ -158,15 +149,21 @@ export function agentToItem(p, full, { system = false } = {}) {
   };
 }
 
+async function readPlistJson(file) {
+  return JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', file])).stdout);
+}
+
+function listDir(dir, ext) {
+  try { return fs.readdirSync(dir).filter((f) => f.endsWith(ext)); } catch { return []; }
+}
+
 async function scanAgentDir(dir, off, opts) {
   const items = [];
-  let files = [];
-  try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.plist')); } catch { return items; }
-  for (const file of files) {
+  for (const file of listDir(dir, '.plist')) {
     const full = path.join(dir, file);
     if (full === PLIST) continue;
     let p;
-    try { p = JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', full])).stdout); } catch { continue; }
+    try { p = await readPlistJson(full); } catch { continue; }
     if (off.has(p.Label)) continue;
     const item = agentToItem(p, full, opts);
     if (item) items.push(item);
@@ -175,7 +172,7 @@ async function scanAgentDir(dir, off, opts) {
 }
 
 async function scanLaunchAgents() {
-  const off = await disabledLabels();
+  const { off } = await launchdOverrides();
   return [
     ...(await scanAgentDir(USER_AGENTS, off, { system: false })),
     ...(await scanAgentDir(SYSTEM_AGENTS, off, { system: true })),
@@ -282,14 +279,6 @@ export function appHelperToItem(bundleId, appPath, helperPath) {
     command: `open ${shq(helperPath)}`, cwd: '', manual: true,
     data: { label: bundleId, app, file: helperPath },
   };
-}
-
-async function readPlistJson(file) {
-  return JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', file])).stdout);
-}
-
-function listDir(dir, ext) {
-  try { return fs.readdirSync(dir).filter((f) => f.endsWith(ext)); } catch { return []; }
 }
 
 async function scanAppAgents(includeInactive) {
