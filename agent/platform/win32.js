@@ -36,7 +36,7 @@ function reg(args) {
   return spawnSync('reg', args, { windowsHide: true, encoding: 'utf8' });
 }
 
-export function autostartCommand() {
+function autostartCommand() {
   // conhost --headless runs node without any console window.
   const conhost = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'conhost.exe');
   return `"${conhost}" --headless "${process.execPath}" "${AGENT_ENTRY}"`;

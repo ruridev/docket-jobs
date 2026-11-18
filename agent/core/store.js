@@ -3,7 +3,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 
-export const RESTART_POLICIES = ['0', '3', 'always'];
+const RESTART_POLICIES = ['0', '3', 'always'];
 
 export function readJson(file, fallback) {
   try {

@@ -23,7 +23,7 @@ function xml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-export function plistContent() {
+function plistContent() {
   const agentLog = path.join(LOG_DIR, 'agent.log');
   // launchd starts with a minimal PATH; keep the one from install time so node/npm/python resolve.
   return `<?xml version="1.0" encoding="UTF-8"?>
