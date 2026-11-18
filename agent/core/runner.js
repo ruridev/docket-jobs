@@ -108,8 +108,7 @@ export class Runner {
 
     const cwd = job.cwd || os.homedir();
     if (!fs.existsSync(cwd)) {
-      Object.assign(r, { status: 'failed', exitCode: null, pid: null });
-      this.logs.append(job.id, { lvl: 'ERR', k: 'cwdMissing', a: [cwd] });
+      this.fail(job.id, r, 'cwdMissing', cwd);
       return { error: 'cwd_missing' };
     }
 
@@ -126,8 +125,7 @@ export class Runner {
       child = this.platform.spawnJob(job.command, { cwd, hidden: job.hidden, stdio: ['ignore', fd, fd] });
     } catch (err) {
       fs.closeSync(fd);
-      Object.assign(r, { status: 'failed', exitCode: null, pid: null });
-      this.logs.append(job.id, { lvl: 'ERR', k: 'spawnError', a: [String(err.message)] });
+      this.fail(job.id, r, 'spawnError', String(err.message));
       return { error: 'spawn_failed' };
     }
     fs.closeSync(fd);
@@ -140,13 +138,17 @@ export class Runner {
 
     child.once('error', (err) => {
       if (r.child !== child) return;
-      Object.assign(r, { child: null, pid: null, status: 'failed', exitCode: null });
-      this.logs.append(job.id, { lvl: 'ERR', k: 'spawnError', a: [String(err.message)] });
+      this.fail(job.id, r, 'spawnError', String(err.message));
       this.persist();
     });
     child.once('exit', (code, signal) => this.onExit(job.id, child, code, signal));
     this.persist();
     return { ok: true };
+  }
+
+  fail(id, r, k, arg) {
+    Object.assign(r, { child: null, pid: null, status: 'failed', exitCode: null });
+    this.logs.append(id, { lvl: 'ERR', k, a: [arg] });
   }
 
   onExit(id, child, code, signal) {
@@ -215,12 +217,15 @@ export class Runner {
     return { ok: true };
   }
 
-  forget(id) {
+  /** Stops the job and deletes it with its logs. */
+  removeJob(id) {
     this.stop(id);
     const r = this.recs.get(id);
     if (r) clearTimeout(r.timer);
     this.recs.delete(id);
     this.persist();
+    this.store.removeJob(id);
+    this.logs.remove(id);
   }
 
   tick() {

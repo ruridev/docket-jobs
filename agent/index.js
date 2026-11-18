@@ -34,7 +34,7 @@ if (autostartSupported) {
 const store = new Store(DATA_DIR);
 const logs = new LogStore(LOG_DIR);
 const runner = new Runner({ store, logs, platform });
-const importer = new StartupImporter({ store, runner, logs, platform, dataDir: DATA_DIR });
+const importer = new StartupImporter({ store, runner, platform, dataDir: DATA_DIR });
 const server = createServer({ store, runner, logs, platform, autostartSupported, port, webDir: WEB_DIR, auth, importer });
 
 server.on('error', (err) => {

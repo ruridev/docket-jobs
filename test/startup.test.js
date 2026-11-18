@@ -32,7 +32,7 @@ function setup() {
   const logs = new LogStore(path.join(dir, 'logs'));
   const fake = fakePlatform();
   const runner = new Runner({ store, logs, platform: fake });
-  const importer = new StartupImporter({ store, runner, logs, platform: fake, dataDir: dir });
+  const importer = new StartupImporter({ store, runner, platform: fake, dataDir: dir });
   return { dir, store, logs, runner, importer, fake };
 }
 
@@ -67,7 +67,7 @@ test('imports survive an agent restart', async () => {
   const { dir, logs, importer, fake, runner } = setup();
   await importer.import('run:Discord');
   const store2 = new Store(dir);
-  const importer2 = new StartupImporter({ store: store2, runner, logs, platform: fake, dataDir: dir });
+  const importer2 = new StartupImporter({ store: store2, runner, platform: fake, dataDir: dir });
   assert.deepEqual((await importer2.list()).imported.map((i) => i.key), ['run:Discord']);
   assert.equal((await importer2.undo('run:Discord')).ok, true);
   assert.equal(fake.entries.has('run:Discord'), true);

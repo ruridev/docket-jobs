@@ -6,24 +6,24 @@ import { promisify } from 'node:util';
 
 const run = promisify(execFile);
 import { AGENT_ENTRY, LOG_DIR, ROOT } from '../paths.js';
+import { isAlive, codeError, userBackupDir, backupPath, runText } from './common.js';
+
+export { isAlive };
 
 /** Own process group (detached), so it survives an agent restart and killTree reaches all of it. */
 export function spawnJob(command, { cwd, stdio }) {
   return spawn(command, [], { cwd, shell: true, detached: true, stdio, env: process.env });
 }
 
+const USER_AGENTS = path.join(os.homedir(), 'Library', 'LaunchAgents');
 const LABEL = process.env.DOCKET_JOBS_AUTOSTART_NAME || 'com.ruridev.docket-jobs';
-const PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', `${LABEL}.plist`);
+const PLIST = path.join(USER_AGENTS, `${LABEL}.plist`);
 
 function xml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-export function plistPath() {
-  return PLIST;
-}
-
-export function plistContent() {
+function plistContent() {
   const agentLog = path.join(LOG_DIR, 'agent.log');
   // launchd starts with a minimal PATH; keep the one from install time so node/npm/python resolve.
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -78,15 +78,6 @@ export function syncAutostart() {
   return true;
 }
 
-export function isAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return err.code === 'EPERM';
-  }
-}
-
 /** When the process started (ms), or null if unknown. Tells a reused pid apart from our job. */
 export function processStartTime(pid) {
   const res = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' } });
@@ -94,9 +85,47 @@ export function processStartTime(pid) {
   return Number.isFinite(t) ? t : null;
 }
 
-/* ---------- other programs' startup items ---------- */
+/* ---------- servers already running (see core/ports.js); also used on Linux ---------- */
 
-const USER_AGENTS = path.join(os.homedir(), 'Library', 'LaunchAgents');
+/** Parses `lsof -nP -iTCP -sTCP:LISTEN -F pn` output (macOS / Linux). */
+export function parseLsof(text) {
+  const out = [];
+  let pid = 0;
+  for (const line of text.split(/\r?\n/)) {
+    if (line.startsWith('p')) pid = Number(line.slice(1));
+    else if (line.startsWith('n')) {
+      const addr = line.slice(1);
+      const i = addr.lastIndexOf(':');
+      const port = Number(addr.slice(i + 1));
+      const host = addr.slice(0, i).replace(/^\[|\]$/g, '');
+      if (port && pid) out.push({ host: host === '*' ? '0.0.0.0' : host, port, pid });
+    }
+  }
+  return out;
+}
+
+export async function listListening() {
+  return parseLsof(await runText('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-F', 'pn']));
+}
+
+/** All processes as [{ pid, ppid, name, cmd, cwd }]; cwd is filled only for the pids in withCwd. */
+export async function processTable(withCwd = []) {
+  const rows = [];
+  // Other users' command lines can hold their secrets, so only this user's are kept
+  const me = process.getuid?.();
+  for (const line of (await runText('ps', ['-axo', 'pid=,ppid=,uid=,comm=,args='])).split('\n')) {
+    const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(line);
+    if (m) rows.push({ pid: Number(m[1]), ppid: Number(m[2]), name: m[4].split('/').pop(), cmd: Number(m[3]) === me ? m[5] : '', cwd: null });
+  }
+  for (const r of rows) {
+    if (!withCwd.includes(r.pid)) continue;
+    const n = (await runText('lsof', ['-a', '-p', String(r.pid), '-d', 'cwd', '-Fn'])).split('\n').find((l) => l.startsWith('n'));
+    if (n) r.cwd = n.slice(1);
+  }
+  return rows;
+}
+
+/* ---------- other programs' startup items ---------- */
 
 function shq(s) {
   return /^[\w@%+=:,./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`;
@@ -130,10 +159,6 @@ async function launchdOverrides() {
   }
 }
 
-async function disabledLabels() {
-  return (await launchdOverrides()).off;
-}
-
 // Tests point the folders that root acts on at temp folders; outside `node --test` they are fixed.
 const testDir = (name) => (process.env.NODE_TEST_CONTEXT ? process.env[name] : '');
 // LaunchAgents for every user. Readable by anyone, but owned by root, so turning one off
@@ -164,15 +189,21 @@ export function agentToItem(p, full, { system = false } = {}) {
   };
 }
 
+async function readPlistJson(file) {
+  return JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', file])).stdout);
+}
+
+function listDir(dir, ext) {
+  try { return fs.readdirSync(dir).filter((f) => f.endsWith(ext)); } catch { return []; }
+}
+
 async function scanAgentDir(dir, off, opts) {
   const items = [];
-  let files = [];
-  try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.plist')); } catch { return items; }
-  for (const file of files) {
+  for (const file of listDir(dir, '.plist')) {
     const full = path.join(dir, file);
     if (full === PLIST) continue;
     let p;
-    try { p = JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', full])).stdout); } catch { continue; }
+    try { p = await readPlistJson(full); } catch { continue; }
     if (off.has(p.Label)) continue;
     const item = agentToItem(p, full, opts);
     if (item) items.push(item);
@@ -181,15 +212,11 @@ async function scanAgentDir(dir, off, opts) {
 }
 
 async function scanLaunchAgents() {
-  const off = await disabledLabels();
+  const { off } = await launchdOverrides();
   return [
     ...(await scanAgentDir(USER_AGENTS, off, { system: false })),
     ...(await scanAgentDir(SYSTEM_AGENTS, off, { system: true })),
   ];
-}
-
-function adminError(code, cause) {
-  return Object.assign(new Error(code), { code, cause });
 }
 
 /**
@@ -203,7 +230,7 @@ async function runAsAdmin(shellCommand, prompt) {
     await jxa(script, [shellCommand, prompt], 180000);
   } catch (err) {
     // -128 = the user pressed Cancel on the password prompt.
-    throw adminError(/-128/.test(String(err.stderr || err.message)) ? 'uac_cancelled' : 'admin_failed', err);
+    throw codeError(/-128/.test(String(err.stderr || err.message)) ? 'uac_cancelled' : 'admin_failed', err);
   }
 }
 
@@ -213,17 +240,6 @@ function plistName(file, admin = true) {
   const name = path.basename(String(file));
   if (!(admin ? PLIST_NAME : /\.plist$/).test(name)) throw new Error(`unexpected plist name: ${name}`);
   return name;
-}
-
-/** The user-level backup folder; refused if it is a symlink (it could point anywhere). */
-function userBackupDir(backupDir) {
-  try {
-    if (fs.lstatSync(backupDir).isSymbolicLink()) throw new Error('startup-backup is a symlink');
-  } catch (err) {
-    if (err.code !== 'ENOENT') throw err;
-  }
-  fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
-  return backupDir;
 }
 
 /**
@@ -244,12 +260,6 @@ export function agentRestorePaths(backup, key, backupDir) {
   // Root installs this file, so it must come from the root-owned folder, never from data/.
   if (path.dirname(String(backup.to)) !== SYSTEM_BACKUP_DIR) throw new Error('backup is not in the root-owned backup folder');
   return { from: path.join(SYSTEM_BACKUP_DIR, saved), to, admin };
-}
-
-function backupPath(backupDir, file) {
-  let dest = path.join(backupDir, path.basename(file));
-  if (fs.existsSync(dest)) dest = path.join(backupDir, `${Date.now()}-${path.basename(file)}`);
-  return dest;
 }
 
 async function scanLoginItems() {
@@ -309,14 +319,6 @@ export function appHelperToItem(bundleId, appPath, helperPath) {
     command: `open ${shq(helperPath)}`, cwd: '', manual: true,
     data: { label: bundleId, app, file: helperPath },
   };
-}
-
-async function readPlistJson(file) {
-  return JSON.parse((await run('plutil', ['-convert', 'json', '-o', '-', file])).stdout);
-}
-
-function listDir(dir, ext) {
-  try { return fs.readdirSync(dir).filter((f) => f.endsWith(ext)); } catch { return []; }
 }
 
 async function scanAppAgents(includeInactive) {
@@ -400,7 +402,7 @@ export async function disableStartupItem(item, backupDir) {
   if (item.source === 'appagent') {
     // docket-jobs can't switch it off; the user does that in System Settings first.
     if ((await loadedLabels()).has(item.data.label)) {
-      throw Object.assign(new Error('still_enabled'), { code: 'still_enabled' });
+      throw codeError('still_enabled');
     }
     return { kind: 'manual', label: item.data.label, app: item.data.app };
   }

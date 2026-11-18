@@ -6,8 +6,12 @@ import { promisify } from 'node:util';
 
 const runAsync = promisify(execFile);
 import { AGENT_ENTRY } from '../paths.js';
+import { isAlive, codeError, userBackupDir, backupPath, runText } from './common.js';
+
+export { isAlive };
 
 const LAUNCHER = fileURLToPath(new URL('./win-launcher.js', import.meta.url));
+const PROCINFO = fileURLToPath(new URL('./procinfo.ps1', import.meta.url));
 
 /**
  * Starts a job detached (outside the agent's job object, so it survives an agent restart)
@@ -32,7 +36,7 @@ function reg(args) {
   return spawnSync('reg', args, { windowsHide: true, encoding: 'utf8' });
 }
 
-export function autostartCommand() {
+function autostartCommand() {
   // conhost --headless runs node without any console window.
   const conhost = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'conhost.exe');
   return `"${conhost}" --headless "${process.execPath}" "${AGENT_ENTRY}"`;
@@ -70,15 +74,6 @@ export function killTree(pid) {
   spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true });
 }
 
-export function isAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return err.code === 'EPERM';
-  }
-}
-
 /** When the process started (ms), or null if unknown. Tells a reused pid apart from our job. */
 export function processStartTime(pid) {
   const res = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
@@ -103,6 +98,35 @@ export function outputDecoder() {
   return (buf) => {
     try { return utf8.decode(buf); } catch { return (fallback || lenient).decode(buf); }
   };
+}
+
+/* ---------- servers already running (see core/ports.js) ---------- */
+
+/** Parses `netstat -ano` output into listening sockets. A listening TCP row has a foreign address of *:0. */
+export function parseNetstat(text) {
+  const out = [];
+  for (const line of text.split(/\r?\n/)) {
+    const cols = line.trim().split(/\s+/);
+    if (cols.length < 5 || !/^TCP/i.test(cols[0])) continue;
+    const [, local, foreign] = cols;
+    if (!/^(0\.0\.0\.0|\[::\]|\*):0$/.test(foreign)) continue;
+    const i = local.lastIndexOf(':');
+    const port = Number(local.slice(i + 1));
+    const host = local.slice(0, i).replace(/^\[|\]$/g, '');
+    const pid = Number(cols[cols.length - 1]);
+    if (port && Number.isInteger(pid)) out.push({ host, port, pid });
+  }
+  return out;
+}
+
+export async function listListening() {
+  return parseNetstat(await runText('netstat', ['-ano']));
+}
+
+/** All processes as [{ pid, ppid, name, cmd, cwd }]; cwd is filled only for the pids in withCwd. */
+export async function processTable(withCwd = []) {
+  const out = await runText('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', PROCINFO, '-All', '-Ids', withCwd.join(',') || '0']);
+  try { return JSON.parse(out.trim() || '[]'); } catch { return []; }
 }
 
 /* ---------- other programs' startup items ---------- */
@@ -224,10 +248,6 @@ export const psString = (s) =>
   `([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(${psQuote(Buffer.from(String(s), 'utf8').toString('base64'))})))`;
 const UAC_WAIT_MS = 180000;
 
-function startupError(code, cause) {
-  return Object.assign(new Error(code), { code, cause });
-}
-
 async function setTaskEnabled(path_, name, enabled, admin = false) {
   const verb = enabled ? 'Enable-ScheduledTask' : 'Disable-ScheduledTask';
   if (!admin) {
@@ -236,7 +256,7 @@ async function setTaskEnabled(path_, name, enabled, admin = false) {
       await powershell(`${verb} -TaskPath $env:DJ_TASK_PATH -TaskName $env:DJ_TASK_NAME | Out-Null`,
         { DJ_TASK_PATH: path_, DJ_TASK_NAME: name });
     } catch (err) {
-      throw startupError('change_failed', err);
+      throw codeError('change_failed', err);
     }
     return;
   }
@@ -258,7 +278,7 @@ exit $p.ExitCode`;
     await powershell(outer, { DJ_ENC: encoded }, UAC_WAIT_MS);
   } catch (err) {
     // 3 = the user said No on the UAC prompt (ERROR_CANCELLED).
-    throw startupError(err.code === 3 ? 'uac_cancelled' : 'admin_failed', err);
+    throw codeError(err.code === 3 ? 'uac_cancelled' : 'admin_failed', err);
   }
 }
 
@@ -323,9 +343,7 @@ export async function disableStartupItem(item, backupDir) {
     return { kind: 'run', name, type, value };
   }
   if (item.source === 'folder') {
-    fs.mkdirSync(backupDir, { recursive: true });
-    let dest = path.join(backupDir, path.basename(item.data.file));
-    if (fs.existsSync(dest)) dest = path.join(backupDir, `${Date.now()}-${path.basename(item.data.file)}`);
+    const dest = backupPath(userBackupDir(backupDir), item.data.file);
     fs.renameSync(item.data.file, dest);
     return { kind: 'folder', from: item.data.file, to: dest };
   }
@@ -345,7 +363,7 @@ export async function restoreStartupItem(backup, key, backupDir) {
   }
   if (backup.kind === 'folder') {
     // Both paths are rebuilt from the fixed folders: only the file names come from the record.
-    const from = path.join(backupDir, path.basename(String(backup.to)));
+    const from = path.join(userBackupDir(backupDir), path.basename(String(backup.to)));
     const to = path.join(STARTUP_DIR, path.basename(String(backup.from)));
     if (fs.existsSync(to)) throw new Error('A file with the same name is already there');
     fs.mkdirSync(path.dirname(to), { recursive: true });
