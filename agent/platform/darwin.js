@@ -6,6 +6,9 @@ import { promisify } from 'node:util';
 
 const run = promisify(execFile);
 import { AGENT_ENTRY, LOG_DIR, ROOT } from '../paths.js';
+import { isAlive, codeError, userBackupDir, backupPath } from './common.js';
+
+export { isAlive };
 
 /** Own process group (detached), so it survives an agent restart and killTree reaches all of it. */
 export function spawnJob(command, { cwd, stdio }) {
@@ -76,15 +79,6 @@ export function syncAutostart() {
   if (current === null || current.includes(xml(AGENT_ENTRY))) return false;
   enableAutostart();
   return true;
-}
-
-export function isAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return err.code === 'EPERM';
-  }
 }
 
 /** When the process started (ms), or null if unknown. Tells a reused pid apart from our job. */
@@ -188,10 +182,6 @@ async function scanLaunchAgents() {
   ];
 }
 
-function adminError(code, cause) {
-  return Object.assign(new Error(code), { code, cause });
-}
-
 /**
  * Runs one shell command as root behind macOS's administrator password prompt, which shows
  * `prompt` so you can see what you are approving. Both go in as osascript arguments, so no
@@ -203,7 +193,7 @@ async function runAsAdmin(shellCommand, prompt) {
     await jxa(script, [shellCommand, prompt], 180000);
   } catch (err) {
     // -128 = the user pressed Cancel on the password prompt.
-    throw adminError(/-128/.test(String(err.stderr || err.message)) ? 'uac_cancelled' : 'admin_failed', err);
+    throw codeError(/-128/.test(String(err.stderr || err.message)) ? 'uac_cancelled' : 'admin_failed', err);
   }
 }
 
@@ -213,17 +203,6 @@ function plistName(file, admin = true) {
   const name = path.basename(String(file));
   if (!(admin ? PLIST_NAME : /\.plist$/).test(name)) throw new Error(`unexpected plist name: ${name}`);
   return name;
-}
-
-/** The user-level backup folder; refused if it is a symlink (it could point anywhere). */
-function userBackupDir(backupDir) {
-  try {
-    if (fs.lstatSync(backupDir).isSymbolicLink()) throw new Error('startup-backup is a symlink');
-  } catch (err) {
-    if (err.code !== 'ENOENT') throw err;
-  }
-  fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
-  return backupDir;
 }
 
 /**
@@ -244,12 +223,6 @@ export function agentRestorePaths(backup, key, backupDir) {
   // Root installs this file, so it must come from the root-owned folder, never from data/.
   if (path.dirname(String(backup.to)) !== SYSTEM_BACKUP_DIR) throw new Error('backup is not in the root-owned backup folder');
   return { from: path.join(SYSTEM_BACKUP_DIR, saved), to, admin };
-}
-
-function backupPath(backupDir, file) {
-  let dest = path.join(backupDir, path.basename(file));
-  if (fs.existsSync(dest)) dest = path.join(backupDir, `${Date.now()}-${path.basename(file)}`);
-  return dest;
 }
 
 async function scanLoginItems() {
@@ -400,7 +373,7 @@ export async function disableStartupItem(item, backupDir) {
   if (item.source === 'appagent') {
     // docket-jobs can't switch it off; the user does that in System Settings first.
     if ((await loadedLabels()).has(item.data.label)) {
-      throw Object.assign(new Error('still_enabled'), { code: 'still_enabled' });
+      throw codeError('still_enabled');
     }
     return { kind: 'manual', label: item.data.label, app: item.data.app };
   }
