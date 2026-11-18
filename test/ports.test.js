@@ -5,8 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import {
-  parseNetstat, parseLsof, titleOf, descendants, guessLaunch, simplifyCommand, projectRoot, scanServers, probe,
+  titleOf, descendants, guessLaunch, simplifyCommand, projectRoot, scanServers, probe,
 } from '../agent/core/ports.js';
+import { parseNetstat } from '../agent/platform/win32.js';
+import { parseLsof } from '../agent/platform/darwin.js';
 import { Store } from '../agent/core/store.js';
 import { LogStore } from '../agent/core/logs.js';
 import { Runner } from '../agent/core/runner.js';

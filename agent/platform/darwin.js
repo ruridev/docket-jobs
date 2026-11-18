@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 
 const run = promisify(execFile);
 import { AGENT_ENTRY, LOG_DIR, ROOT } from '../paths.js';
-import { isAlive, codeError, userBackupDir, backupPath } from './common.js';
+import { isAlive, codeError, userBackupDir, backupPath, runText } from './common.js';
 
 export { isAlive };
 
@@ -83,6 +83,46 @@ export function processStartTime(pid) {
   const res = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' } });
   const t = Date.parse((res.stdout || '').trim());
   return Number.isFinite(t) ? t : null;
+}
+
+/* ---------- servers already running (see core/ports.js); also used on Linux ---------- */
+
+/** Parses `lsof -nP -iTCP -sTCP:LISTEN -F pn` output (macOS / Linux). */
+export function parseLsof(text) {
+  const out = [];
+  let pid = 0;
+  for (const line of text.split(/\r?\n/)) {
+    if (line.startsWith('p')) pid = Number(line.slice(1));
+    else if (line.startsWith('n')) {
+      const addr = line.slice(1);
+      const i = addr.lastIndexOf(':');
+      const port = Number(addr.slice(i + 1));
+      const host = addr.slice(0, i).replace(/^\[|\]$/g, '');
+      if (port && pid) out.push({ host: host === '*' ? '0.0.0.0' : host, port, pid });
+    }
+  }
+  return out;
+}
+
+export async function listListening() {
+  return parseLsof(await runText('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-F', 'pn']));
+}
+
+/** All processes as [{ pid, ppid, name, cmd, cwd }]; cwd is filled only for the pids in withCwd. */
+export async function processTable(withCwd = []) {
+  const rows = [];
+  // Other users' command lines can hold their secrets, so only this user's are kept
+  const me = process.getuid?.();
+  for (const line of (await runText('ps', ['-axo', 'pid=,ppid=,uid=,comm=,args='])).split('\n')) {
+    const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(line);
+    if (m) rows.push({ pid: Number(m[1]), ppid: Number(m[2]), name: m[4].split('/').pop(), cmd: Number(m[3]) === me ? m[5] : '', cwd: null });
+  }
+  for (const r of rows) {
+    if (!withCwd.includes(r.pid)) continue;
+    const n = (await runText('lsof', ['-a', '-p', String(r.pid), '-d', 'cwd', '-Fn'])).split('\n').find((l) => l.startsWith('n'));
+    if (n) r.cwd = n.slice(1);
+  }
+  return rows;
 }
 
 /* ---------- other programs' startup items ---------- */

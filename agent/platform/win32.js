@@ -6,11 +6,12 @@ import { promisify } from 'node:util';
 
 const runAsync = promisify(execFile);
 import { AGENT_ENTRY } from '../paths.js';
-import { isAlive, codeError, userBackupDir, backupPath } from './common.js';
+import { isAlive, codeError, userBackupDir, backupPath, runText } from './common.js';
 
 export { isAlive };
 
 const LAUNCHER = fileURLToPath(new URL('./win-launcher.js', import.meta.url));
+const PROCINFO = fileURLToPath(new URL('./procinfo.ps1', import.meta.url));
 
 /**
  * Starts a job detached (outside the agent's job object, so it survives an agent restart)
@@ -97,6 +98,35 @@ export function outputDecoder() {
   return (buf) => {
     try { return utf8.decode(buf); } catch { return (fallback || lenient).decode(buf); }
   };
+}
+
+/* ---------- servers already running (see core/ports.js) ---------- */
+
+/** Parses `netstat -ano` output into listening sockets. A listening TCP row has a foreign address of *:0. */
+export function parseNetstat(text) {
+  const out = [];
+  for (const line of text.split(/\r?\n/)) {
+    const cols = line.trim().split(/\s+/);
+    if (cols.length < 5 || !/^TCP/i.test(cols[0])) continue;
+    const [, local, foreign] = cols;
+    if (!/^(0\.0\.0\.0|\[::\]|\*):0$/.test(foreign)) continue;
+    const i = local.lastIndexOf(':');
+    const port = Number(local.slice(i + 1));
+    const host = local.slice(0, i).replace(/^\[|\]$/g, '');
+    const pid = Number(cols[cols.length - 1]);
+    if (port && Number.isInteger(pid)) out.push({ host, port, pid });
+  }
+  return out;
+}
+
+export async function listListening() {
+  return parseNetstat(await runText('netstat', ['-ano']));
+}
+
+/** All processes as [{ pid, ppid, name, cmd, cwd }]; cwd is filled only for the pids in withCwd. */
+export async function processTable(withCwd = []) {
+  const out = await runText('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', PROCINFO, '-All', '-Ids', withCwd.join(',') || '0']);
+  try { return JSON.parse(out.trim() || '[]'); } catch { return []; }
 }
 
 /* ---------- other programs' startup items ---------- */

@@ -1,5 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+
+/** A command's output, or '' when it fails with no output. Never throws. */
+export function runText(cmd, args) {
+  return new Promise((resolve) => {
+    execFile(cmd, args, { windowsHide: true, maxBuffer: 16 * 1024 * 1024, timeout: 15000 }, (err, stdout) => {
+      resolve(err && !stdout ? '' : String(stdout));
+    });
+  });
+}
 
 export function isAlive(pid) {
   try {
