@@ -86,9 +86,7 @@ export function createServer({ store, runner, logs, platform, autostartSupported
         return send(res, 200, { job: jobView(r.job) });
       }
       if (parts.length === 2 && method === 'DELETE') {
-        runner.forget(id);
-        store.removeJob(id);
-        logs.remove(id);
+        runner.removeJob(id);
         return send(res, 200, { ok: true });
       }
       if (parts.length === 3 && parts[2] === 'run' && method === 'POST') {

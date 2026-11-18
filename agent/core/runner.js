@@ -215,12 +215,15 @@ export class Runner {
     return { ok: true };
   }
 
-  forget(id) {
+  /** Stops the job and deletes it with its logs. */
+  removeJob(id) {
     this.stop(id);
     const r = this.recs.get(id);
     if (r) clearTimeout(r.timer);
     this.recs.delete(id);
     this.persist();
+    this.store.removeJob(id);
+    this.logs.remove(id);
   }
 
   tick() {

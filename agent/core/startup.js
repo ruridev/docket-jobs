@@ -6,10 +6,9 @@ import { readJson, writeJsonAtomic } from './store.js';
  * Each import is recorded with what is needed to restore the original entry.
  */
 export class StartupImporter {
-  constructor({ store, runner, logs, platform, dataDir }) {
+  constructor({ store, runner, platform, dataDir }) {
     this.store = store;
     this.runner = runner;
-    this.logs = logs;
     this.platform = platform;
     this.file = path.join(dataDir, 'imports.json');
     this.backupDir = path.join(dataDir, 'startup-backup');
@@ -55,11 +54,7 @@ export class StartupImporter {
     const rec = this.records.find((r) => r.key === key);
     if (!rec) return { error: 'not_found' };
     const restored = await this.platform.restoreStartupItem(rec.backup, rec.key, this.backupDir);
-    if (this.store.getJob(rec.jobId)) {
-      this.runner.forget(rec.jobId);
-      this.store.removeJob(rec.jobId);
-      this.logs.remove(rec.jobId);
-    }
+    if (this.store.getJob(rec.jobId)) this.runner.removeJob(rec.jobId);
     this.records = this.records.filter((r) => r.key !== key);
     this.save();
     // manual: the original has to be switched back on by the user (macOS app agents).
